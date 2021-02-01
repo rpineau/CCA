@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <memory.h>
+#include <string.h>
 #ifdef SB_MAC_BUILD
 #include <unistd.h>
 #endif
@@ -47,7 +48,7 @@
 enum CCA_Errors    {PLUGIN_OK = 0, NOT_CONNECTED, CCA_CANT_CONNECT, CCA_BAD_CMD_RESPONSE, COMMAND_FAILED};
 enum MotorDir       {NORMAL = 0 , REVERSE};
 enum MotorStatus    {IDLE = 0, MOVING};
-
+enum TempSources    {AIR, TUBE, MIRROR};
 typedef unsigned char byte;
 
 typedef enum {
@@ -117,6 +118,7 @@ protected:
     bool            m_bPosLimitEnabled;
     bool            m_bMoving;
 
+    int             m_nTempSource;
     int             m_nCurPos;
     bool            m_bIsAtOrigin;
     bool            m_bIsMoving;

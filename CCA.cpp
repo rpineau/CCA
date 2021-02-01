@@ -24,6 +24,7 @@ CCCAController::CCCAController()
     m_bMoving = false;
     m_DevHandle = 0;
 
+    m_nTempSource = AIR;
     
     m_bIsAtOrigin = false;
     m_bIsMoving = false;
@@ -138,7 +139,7 @@ void CCCAController::Disconnect()
 
     // release the focuser once we're not connected to it
     memset(m_HIDBuffer, 0x00, DATA_BUFFER_SIZE);
-    m_HIDBuffer[0] = 0x00; // report ID
+    m_HIDBuffer[0] = 0x01; // report ID
     m_HIDBuffer[1] = 0x01; // size is 1 bytes
     m_HIDBuffer[2] = RELEASE; // command
 
@@ -166,7 +167,7 @@ int CCCAController::haltFocuser()
     byte szRespBuffer[DATA_BUFFER_SIZE];
 
     memset(m_HIDBuffer, 0x00, DATA_BUFFER_SIZE);
-    m_HIDBuffer[0] = 0x00; // report ID
+    m_HIDBuffer[0] = 0x01; // report ID
     m_HIDBuffer[1] = 0x01; // size is 1 bytes
     m_HIDBuffer[2] = STOP; // command
 
@@ -270,7 +271,7 @@ int CCCAController::isMotorMoving(bool &bMoving)
 
 
     memset(m_HIDBuffer, 0x00, DATA_BUFFER_SIZE);
-    m_HIDBuffer[0] = 0x00; // report ID
+    m_HIDBuffer[0] = 0x01; // report ID
     m_HIDBuffer[1] = 0x01; // size is 1 bytes
     m_HIDBuffer[2] = DUMMY; // dummy command to get a report to check status
 
@@ -300,7 +301,7 @@ int CCCAController::getFirmwareVersion(char *pszVersion, int nStrMaxLen)
 
 
     memset(m_HIDBuffer, 0x00, DATA_BUFFER_SIZE);
-    m_HIDBuffer[0] = 0x00; // report ID
+    m_HIDBuffer[0] = 0x01; // report ID
     m_HIDBuffer[1] = 0x01; // size is 1 bytes
     m_HIDBuffer[2] = DUMMY; // dummy command to get a report to get version
 
@@ -328,7 +329,7 @@ int CCCAController::getTemperature(double &dTemperature)
 
 
     memset(m_HIDBuffer, 0x00, DATA_BUFFER_SIZE);
-    m_HIDBuffer[0] = 0x00; // report ID
+    m_HIDBuffer[0] = 0x01; // report ID
     m_HIDBuffer[1] = 0x01; // size is 1 bytes
     m_HIDBuffer[2] = DUMMY; // dummy command to get a report to get version
 
@@ -341,7 +342,17 @@ int CCCAController::getTemperature(double &dTemperature)
       parseGeneralResponse(szRespBuffer);
     
     // need to allow user to select the focuser temp source
-    dTemperature = m_fTubeTemp;
+    switch(m_nTempSource) {
+        case AIR:
+            dTemperature = m_fAirTemp;
+            break;
+        case TUBE:
+            dTemperature = m_fTubeTemp;
+            break;
+        case MIRROR:
+            dTemperature = m_fMirorTemp;
+            break;
+    }
     return nErr;
 }
 
@@ -358,7 +369,7 @@ int CCCAController::getPosition(int &nPosition)
 
 
     memset(m_HIDBuffer, 0x00, DATA_BUFFER_SIZE);
-    m_HIDBuffer[0] = 0x00; // report ID
+    m_HIDBuffer[0] = 0x01; // report ID
     m_HIDBuffer[1] = 0x01; // size is 1 bytes
     m_HIDBuffer[2] = DUMMY; // dummy command to get a report to get version
 
@@ -410,8 +421,24 @@ void CCCAController::parseGeneralResponse(byte *Buffer)
         m_fAirTemp      = Get32(Buffer, 45)/ 10.0;
         m_fTubeTemp     = Get32(Buffer, 49) / 10.0;
         m_fMirorTemp    = Get32(Buffer, 43) / 10.0;
+#ifdef PLUGIN_DEBUG
+        ltime = time(NULL);
+        timestamp = asctime(localtime(&ltime));
+        timestamp[strlen(timestamp) - 1] = 0;
+        fprintf(Logfile, "[%s] [CCCAController::parseGeneralResponse] m_nCurPos             : %d\n", timestamp, m_nCurPos);
+        fprintf(Logfile, "[%s] [CCCAController::parseGeneralResponse] m_bIsAtOrigin         : %s\n", timestamp, m_bIsAtOrigin?"Yes":"No");
+        fprintf(Logfile, "[%s] [CCCAController::parseGeneralResponse] m_bIsMoving           : %s\n", timestamp, m_bIsMoving?"Yes":"No");
+        fprintf(Logfile, "[%s] [CCCAController::parseGeneralResponse] m_bFanIsOn            : %s\n", timestamp, m_bFanIsOn?"Yes":"No");
+        fprintf(Logfile, "[%s] [CCCAController::parseGeneralResponse] m_bIsHold             : %s\n", timestamp, m_bIsHold?"Yes":"No");
+        fprintf(Logfile, "[%s] [CCCAController::parseGeneralResponse] m_sVersion            : %s\n", timestamp, m_sVersion.c_str());
+        fprintf(Logfile, "[%s] [CCCAController::parseGeneralResponse] m_nStepPerMillimeter  : %d\n", timestamp, m_nStepPerMillimeter);
+        fprintf(Logfile, "[%s] [CCCAController::parseGeneralResponse] m_nMaxPos             : %d\n", timestamp, m_nMaxPos);
+        fprintf(Logfile, "[%s] [CCCAController::parseGeneralResponse] m_fAirTemp            : %3.2f\n", timestamp, m_fAirTemp);
+        fprintf(Logfile, "[%s] [CCCAController::parseGeneralResponse] m_fTubeTemp           : %3.2f\n", timestamp, m_fTubeTemp);
+        fprintf(Logfile, "[%s] [CCCAController::parseGeneralResponse] m_fMirorTemp          : %3.2f\n", timestamp, m_fMirorTemp);
+        fflush(Logfile);
+#endif
     }
-    
 }
 
 int CCCAController::Get32(const byte *buffer, int position)
