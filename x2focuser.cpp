@@ -131,7 +131,8 @@ int	X2Focuser::establishLink(void)
         m_bLinked = false;
     else
         m_bLinked = true;
-
+    if(nErr)
+        nErr = ERR_NOLINK;
     return nErr;
 }
 

@@ -16,6 +16,7 @@
 		933E14281EDCA6B90044D947 /* x2focuser.h in Headers */ = {isa = PBXBuildFile; fileRef = 933E14241EDCA6B90044D947 /* x2focuser.h */; };
 		939F4F2D1EE1EE6300E26EED /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 939F4F2C1EE1EE6300E26EED /* IOKit.framework */; };
 		939F4F2F1EE1EE7200E26EED /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 939F4F2E1EE1EE7200E26EED /* CoreFoundation.framework */; };
+		93E4669225C8D4A400ECFB9D /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 93E4669125C8D4A400ECFB9D /* AppKit.framework */; };
 		93F7C76A25B5205E00D47E87 /* libhidapi.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 93F7C76625B51D0000D47E87 /* libhidapi.a */; };
 		93F7C76F25B54D3100D47E87 /* hidapi.h in Headers */ = {isa = PBXBuildFile; fileRef = 93F7C76E25B54D3100D47E87 /* hidapi.h */; };
 /* End PBXBuildFile section */
@@ -31,6 +32,7 @@
 		933E14241EDCA6B90044D947 /* x2focuser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = x2focuser.h; sourceTree = "<group>"; };
 		939F4F2C1EE1EE6300E26EED /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 		939F4F2E1EE1EE7200E26EED /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+		93E4669125C8D4A400ECFB9D /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
 		93F7C76625B51D0000D47E87 /* libhidapi.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libhidapi.a; path = static_libs/macOS/libhidapi.a; sourceTree = "<group>"; };
 		93F7C76E25B54D3100D47E87 /* hidapi.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = hidapi.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -40,6 +42,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				93E4669225C8D4A400ECFB9D /* AppKit.framework in Frameworks */,
 				939F4F2F1EE1EE7200E26EED /* CoreFoundation.framework in Frameworks */,
 				939F4F2D1EE1EE6300E26EED /* IOKit.framework in Frameworks */,
 				93F7C76A25B5205E00D47E87 /* libhidapi.a in Frameworks */,
@@ -85,6 +88,7 @@
 		939F4F2B1EE1EE6200E26EED /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				93E4669125C8D4A400ECFB9D /* AppKit.framework */,
 				939F4F2E1EE1EE7200E26EED /* CoreFoundation.framework */,
 				939F4F2C1EE1EE6300E26EED /* IOKit.framework */,
 			);

@@ -45,6 +45,12 @@
 #define MAX_TIMEOUT 1000
 #define LOG_BUFFER_SIZE 256
 
+// #define VENDOR_ID 0x20E1
+// #define PRODUCT_ID 0x0002
+
+#define VENDOR_ID 0x10cf
+#define PRODUCT_ID 0x5500
+
 enum CCA_Errors    {PLUGIN_OK = 0, NOT_CONNECTED, CCA_CANT_CONNECT, CCA_BAD_CMD_RESPONSE, COMMAND_FAILED};
 enum MotorDir       {NORMAL = 0 , REVERSE};
 enum MotorStatus    {IDLE = 0, MOVING};
@@ -97,12 +103,10 @@ public:
     
 protected:
 
-    void            parseGeneralResponse(byte *Buffer);
+    void            parseGeneralResponse(byte *Buffer, int nLength);
     int             Get32(const byte *buffer, int position);
     int             Get16(const byte *buffer, int position);
     
-    SerXInterface   *m_pSerx;
-    LoggerInterface *m_pLogger;
     SleeperInterface    *m_pSleeper;
 
     bool            m_HIDInitOk;

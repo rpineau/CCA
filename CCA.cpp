@@ -12,9 +12,6 @@
 CCCAController::CCCAController()
 {
 
-    m_pSerx = NULL;
-    m_pLogger = NULL;
-
 
     m_bDebugLog = false;
     m_bIsConnected = false;
@@ -62,10 +59,19 @@ CCCAController::CCCAController()
 #endif
 
     
-    if (hid_init())
+    if (hid_init()) {
         m_HIDInitOk = false;
-    else
+#if defined PLUGIN_DEBUG && PLUGIN_DEBUG >= 2
+        ltime = time(NULL);
+        timestamp = asctime(localtime(&ltime));
+        timestamp[strlen(timestamp) - 1] = 0;
+        fprintf(Logfile, "[%s] [CCCAController] hid_init call failed !!!\n", timestamp);
+        fflush(Logfile);
+#endif
+    }
+    else {
         m_HIDInitOk = true;
+    }
 }
 
 CCCAController::~CCCAController()
@@ -83,9 +89,6 @@ int CCCAController::Connect()
 {
     int nErr = PLUGIN_OK;
 
-    if(!m_pSerx)
-        return ERR_COMMNOLINK;
-
 #ifdef PLUGIN_DEBUG
 	ltime = time(NULL);
 	timestamp = asctime(localtime(&ltime));
@@ -95,24 +98,31 @@ int CCCAController::Connect()
 #endif
 
     // vendor id is : 0x20E1 and the product id is : 0x0002.
-    m_DevHandle = hid_open(0x20E1, 0x0002, NULL);
+    m_DevHandle = hid_open(VENDOR_ID, PRODUCT_ID, NULL);
     if (!m_DevHandle) {
         m_bIsConnected = false;
+#ifdef PLUGIN_DEBUG
+        ltime = time(NULL);
+        timestamp = asctime(localtime(&ltime));
+        timestamp[strlen(timestamp) - 1] = 0;
+        fprintf(Logfile, "[%s] CCCAController::Connect hid_open failed for vendor id 0x%04X product id 0x%04X\n", timestamp, VENDOR_ID, PRODUCT_ID);
+        fflush(Logfile);
+#endif
         return CCA_CANT_CONNECT;
     }
     m_bIsConnected = true;
 
+#ifdef PLUGIN_DEBUG
+        ltime = time(NULL);
+        timestamp = asctime(localtime(&ltime));
+        timestamp[strlen(timestamp) - 1] = 0;
+        fprintf(Logfile, "[%s] CCCAController::Connect Connected to vendor id 0x%04X product id 0x%04X\n", timestamp, VENDOR_ID, PRODUCT_ID);
+        fflush(Logfile);
+#endif
+
     // Set the hid_read() function to be non-blocking.
     hid_set_nonblocking(m_DevHandle, 1);
     
-
-    if (m_bDebugLog && m_pLogger) {
-        snprintf(m_szLogBuffer,LOG_BUFFER_SIZE,"[CCCAController::Connect] Connected.\n");
-        m_pLogger->out(m_szLogBuffer);
-
-        snprintf(m_szLogBuffer,LOG_BUFFER_SIZE,"[CCCAController::Connect] Getting Firmware.\n");
-        m_pLogger->out(m_szLogBuffer);
-    }
 
     nErr = getFirmwareVersion(m_szFirmwareVersion, DATA_BUFFER_SIZE);
     if(nErr) {
@@ -121,12 +131,11 @@ int CCCAController::Connect()
 		ltime = time(NULL);
 		timestamp = asctime(localtime(&ltime));
 		timestamp[strlen(timestamp) - 1] = 0;
-		fprintf(Logfile, "[%s] CCCAController::Connect **** ERROR **** getting device status\n", timestamp);
+		fprintf(Logfile, "[%s] CCCAController::Connect **** ERROR **** getting device firmware\n", timestamp);
 		fflush(Logfile);
 #endif
         return nErr;
     }
-    // m_globalStatus.deviceType now contains the device type
     return nErr;
 }
 
@@ -149,7 +158,7 @@ void CCCAController::Disconnect()
 
     nbRead = hid_read(m_DevHandle, szRespBuffer, DATA_BUFFER_SIZE);
     if(nbRead > 0)
-      parseGeneralResponse(szRespBuffer);
+      parseGeneralResponse(szRespBuffer, nbRead);
 
     if(m_bIsConnected )
         hid_close(m_DevHandle);
@@ -177,7 +186,7 @@ int CCCAController::haltFocuser()
 
     nbRead = hid_read(m_DevHandle, szRespBuffer, DATA_BUFFER_SIZE);
     if(nbRead > 0)
-      parseGeneralResponse(szRespBuffer);
+      parseGeneralResponse(szRespBuffer, nbRead);
     return nErr;
 }
 
@@ -218,7 +227,7 @@ int CCCAController::gotoPosition(int nPos)
     
     nbRead = hid_read(m_DevHandle, szRespBuffer, DATA_BUFFER_SIZE);
     if(nbRead > 0)
-      parseGeneralResponse(szRespBuffer);
+      parseGeneralResponse(szRespBuffer, nbRead);
     return nErr;
 }
 
@@ -281,7 +290,7 @@ int CCCAController::isMotorMoving(bool &bMoving)
 
     nbRead = hid_read(m_DevHandle, szRespBuffer, DATA_BUFFER_SIZE);
     if(nbRead > 0)
-      parseGeneralResponse(szRespBuffer);
+      parseGeneralResponse(szRespBuffer, nbRead);
 
     bMoving = m_bIsMoving;
     return nErr;
@@ -311,7 +320,7 @@ int CCCAController::getFirmwareVersion(char *pszVersion, int nStrMaxLen)
 
     nbRead = hid_read(m_DevHandle, szRespBuffer, DATA_BUFFER_SIZE);
     if(nbRead > 0)
-      parseGeneralResponse(szRespBuffer);
+      parseGeneralResponse(szRespBuffer, nbRead);
     
     strncpy(pszVersion, m_sVersion.c_str(), nStrMaxLen);
     return nErr;
@@ -339,7 +348,7 @@ int CCCAController::getTemperature(double &dTemperature)
 
     nbRead = hid_read(m_DevHandle, szRespBuffer, DATA_BUFFER_SIZE);
     if(nbRead > 0)
-      parseGeneralResponse(szRespBuffer);
+      parseGeneralResponse(szRespBuffer, nbRead);
     
     // need to allow user to select the focuser temp source
     switch(m_nTempSource) {
@@ -379,7 +388,7 @@ int CCCAController::getPosition(int &nPosition)
 
     nbRead = hid_read(m_DevHandle, szRespBuffer, DATA_BUFFER_SIZE);
     if(nbRead > 0)
-      parseGeneralResponse(szRespBuffer);
+      parseGeneralResponse(szRespBuffer, nbRead);
 
     nPosition = m_nCurPos;
 
@@ -396,19 +405,18 @@ int CCCAController::getPosLimit()
 #pragma mark command and response functions
 
 
-void CCCAController::parseGeneralResponse(byte *Buffer)
+void CCCAController::parseGeneralResponse(byte *Buffer, int nLength)
 {
 #ifdef PLUGIN_DEBUG
     byte hexBuffer[DATA_BUFFER_SIZE];
-    
-    hexdump(Buffer, hexBuffer, DATA_BUFFER_SIZE);
+    hexdump(Buffer, hexBuffer, (nLength > DATA_BUFFER_SIZE-1 ? DATA_BUFFER_SIZE -1 : nLength));
     ltime = time(NULL);
     timestamp = asctime(localtime(&ltime));
     timestamp[strlen(timestamp) - 1] = 0;
-    fprintf(Logfile, "[%s] [CCCAController::parseGeneralResponse] Buffer :\n %s\n", timestamp, hexBuffer);
+    fprintf(Logfile, "[%s] [CCCAController::parseGeneralResponse] Buffer size %d, content :\n%s\n", timestamp, nLength, hexBuffer);
     fflush(Logfile);
 #endif
-    
+
     if(Buffer[0] == 0x3C) {
         m_nCurPos       = Get32(Buffer, 2);
         m_bIsAtOrigin   = (Buffer[7] & 128) != 0;
