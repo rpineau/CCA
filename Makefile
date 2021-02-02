@@ -15,7 +15,7 @@ OBJS = $(SRCS:.cpp=.o)
 all: ${TARGET_LIB}
 
 $(TARGET_LIB): $(OBJS)
-	$(CC) ${LDFLAGS} -o $@ $^ static_libs/`arch`/libhidapi.a.a
+	$(CC) ${LDFLAGS} -o $@ $^ static_libs/`arch`/libhidapi-hidraw.a
 	$(STRIP) $@ >/dev/null 2>&1  || true
 
 $(SRCS:.cpp=.d):%.d:%.cpp
