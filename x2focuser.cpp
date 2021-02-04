@@ -1,7 +1,6 @@
 
 #include "x2focuser.h"
 
-
 X2Focuser::X2Focuser(const char* pszDisplayName, 
 												const int& nInstanceIndex,
 												SerXInterface						* pSerXIn, 
@@ -22,12 +21,14 @@ X2Focuser::X2Focuser(const char* pszDisplayName,
 	
 	m_bLinked = false;
 	m_nPosition = 0;
-    m_fLastTemp = -273.15f; // aboslute zero :)
 
     // Read in settings
     if (m_pIniUtil) {
+        int nTmp =  m_pIniUtil->readInt(PARENT_KEY, TEMP_SOURCE, AIR);
+        m_CCAController.setTemperatureSource(nTmp);
     }
     m_CCAController.setSleeper(m_pSleeper);
+
 }
 
 X2Focuser::~X2Focuser()
@@ -142,7 +143,6 @@ int	X2Focuser::terminateLink(void)
         return SB_OK;
 
     X2MutexLocker ml(GetMutex());
-    m_CCAController.haltFocuser();
     m_CCAController.Disconnect();
     m_bLinked = false;
 
@@ -167,7 +167,11 @@ int	X2Focuser::execModalSettingsDialog(void)
     X2GUIInterface*					ui = uiutil.X2UI();
     X2GUIExchangeInterface*			dx = NULL;//Comes after ui is loaded
     bool bPressedOK = false;
-
+    double dTemperature;
+    char szTmp[255];
+    int nTmp;
+    bool bTmp;
+    
     mUiEnabled = false;
 
     if (NULL == ui)
@@ -182,10 +186,32 @@ int	X2Focuser::execModalSettingsDialog(void)
     X2MutexLocker ml(GetMutex());
 	// set controls values
     if(m_bLinked) {
-        // new position (set to current )
+        m_CCAController.getTemperatureSource(nTmp);
+        dx->setCurrentIndex("comboBox", nTmp);
+        m_CCAController.getFanState(bTmp);
+        if(bTmp)
+            dx->setChecked("radioButton", 1);
+        else
+            dx->setChecked("radioButton", 1);
+
+        m_CCAController.getTemperature(AIR, dTemperature);
+        snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
+        dx->setText("airTemp", szTmp);
+        
+        m_CCAController.getTemperature(TUBE, dTemperature);
+        snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
+        dx->setText("tubeTemp", szTmp);
+        
+        m_CCAController.getTemperature(MIRROR, dTemperature);
+        snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
+        dx->setText("mirrorTemp", szTmp);
     }
     else {
-        // disable all controls
+        dx->setEnabled("comboBox",false);
+        dx->setEnabled("radioButton",false);
+        dx->setText("airTemp", "");
+        dx->setText("tubeTemp", "");
+        dx->setText("mirrorTemp", "");
     }
 
     //Display the user interface
@@ -196,6 +222,9 @@ int	X2Focuser::execModalSettingsDialog(void)
 
     //Retreive values from the user interface
     if (bPressedOK) {
+        nTmp = dx->currentIndex("comboBox");
+        m_CCAController.setTemperatureSource(nTmp);
+        m_pIniUtil->writeInt(PARENT_KEY, TEMP_SOURCE, nTmp);
         nErr = SB_OK;
     }
     return nErr;
@@ -203,9 +232,31 @@ int	X2Focuser::execModalSettingsDialog(void)
 
 void X2Focuser::uiEvent(X2GUIExchangeInterface* uiex, const char* pszEvent)
 {
-    int nErr = SB_OK;
-    int nTmpVal;
-    char szErrorMessage[LOG_BUFFER_SIZE];
+    double dTemperature;
+    char szTmp[255];
+
+    if (!strcmp(pszEvent, "on_timer")) {
+        if(m_bLinked) {
+            m_CCAController.getTemperature(AIR, dTemperature);
+            snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
+            uiex->setText("airTemp", szTmp);
+            
+            m_CCAController.getTemperature(TUBE, dTemperature);
+            snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
+            uiex->setText("tubeTemp", szTmp);
+            
+            m_CCAController.getTemperature(MIRROR, dTemperature);
+            snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
+            uiex->setText("mirrorTemp", szTmp);
+        }
+    }
+    
+    if (!strcmp(pszEvent, "on_radioButton_clicked")) {
+        m_CCAController.setFanOn(true);
+    }
+    else if (!strcmp(pszEvent, "on_radioButton_2_clicked")) {
+        m_CCAController.setFanOn(false);
+    }
 
 }
 
@@ -236,7 +287,6 @@ int	X2Focuser::focMaximumLimit(int& nPosLimit)
     if(!m_bLinked)
         return NOT_CONNECTED;
 
-    X2MutexLocker ml(GetMutex());
     nPosLimit = m_CCAController.getPosLimit();
 	return SB_OK;
 }
@@ -289,7 +339,7 @@ int	X2Focuser::endFocGoto(void)
 
 int X2Focuser::amountCountFocGoto(void) const					
 { 
-	return 3;
+	return 4;
 }
 
 int	X2Focuser::amountNameFromIndexFocGoto(const int& nZeroBasedIndex, BasicStringInterface& strDisplayName, int& nAmount)
@@ -300,6 +350,7 @@ int	X2Focuser::amountNameFromIndexFocGoto(const int& nZeroBasedIndex, BasicStrin
 		case 0: strDisplayName="10 steps"; nAmount=10;break;
 		case 1: strDisplayName="100 steps"; nAmount=100;break;
 		case 2: strDisplayName="1000 steps"; nAmount=1000;break;
+        case 3: strDisplayName="10000 steps"; nAmount=10000;break;
 	}
 	return SB_OK;
 }
@@ -320,16 +371,8 @@ int X2Focuser::focTemperature(double &dTemperature)
     }
     X2MutexLocker ml(GetMutex());
 
-    // Taken from Richard's Robofocus plugin code.
-    // this prevent us from asking the temperature too often
-    static CStopWatch timer;
+    nErr = m_CCAController.getTemperature(dTemperature);
 
-    if(timer.GetElapsedSeconds() > 30.0f || m_fLastTemp < -99.0f) {
-        nErr = m_CCAController.getTemperature(m_fLastTemp);
-        timer.Reset();
-    }
-
-    dTemperature = m_fLastTemp;
 
     return nErr;
 }

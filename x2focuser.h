@@ -22,7 +22,6 @@
 #include "../../licensedinterfaces/x2guiinterface.h"
 
 
-#include "StopWatch.h"
 #include "CCA.h"
 
 // Forward declare the interfaces that this device is dependent upon
@@ -37,18 +36,9 @@ class TickCountInterface;
 
 
 
-#define PARENT_KEY			"AAF2"
-#define CHILD_KEY_PORTNAME	"PortName"
-#define POS_LIMIT           "PosLimit"
-#define POS_LIMIT_ENABLED   "PosLimitEnable"
+#define PARENT_KEY			"CCA"
+#define TEMP_SOURCE           "TempSource"
 
-#if defined(SB_WIN_BUILD)
-#define DEF_PORT_NAME					"COM1"
-#elif defined(SB_MAC_BUILD)
-#define DEF_PORT_NAME					"/dev/cu.KeySerial1"
-#elif defined(SB_LINUX_BUILD)
-#define DEF_PORT_NAME					"/dev/ttyUSB0"
-#endif
 
 #define LOG_BUFFER_SIZE 256
 #define TMP_BUF_SIZE    1024
@@ -154,7 +144,6 @@ private:
 
 	bool                                    m_bLinked;
 	int                                     m_nPosition;
-    double                                  m_fLastTemp;
     CCCAController                          m_CCAController;
     bool                                    mUiEnabled;
 };

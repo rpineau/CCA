@@ -14,7 +14,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <memory.h>
-#include <string.h>
+
 #ifdef SB_MAC_BUILD
 #include <unistd.h>
 #endif
@@ -36,17 +36,22 @@
 #include "../../licensedinterfaces/sleeperinterface.h"
 
 #include "hidapi.h"
+#include "StopWatch.h"
 
 #define PLUGIN_VERSION      1.0
 
 #define PLUGIN_DEBUG 3
 
-#define DATA_BUFFER_SIZE 256
-#define MAX_TIMEOUT 1000
-#define LOG_BUFFER_SIZE 256
+#define DATA_BUFFER_SIZE    64
+#define MAX_TIMEOUT         1000
+#define LOG_BUFFER_SIZE     256
 
-#define VENDOR_ID 0x20E1
-#define PRODUCT_ID 0x0002
+#define VENDOR_ID   0x20E1
+#define PRODUCT_ID  0x0002
+
+// just to test HID stuff with my only HID device that is not a keyboard or a mouse
+// #define VENDOR_ID 0x10cf
+// #define PRODUCT_ID 0x5500
 
 enum CCA_Errors    {PLUGIN_OK = 0, NOT_CONNECTED, CCA_CANT_CONNECT, CCA_BAD_CMD_RESPONSE, COMMAND_FAILED};
 enum MotorDir       {NORMAL = 0 , REVERSE};
@@ -87,20 +92,25 @@ public:
 
     // command complete functions
     int         isGoToComplete(bool &bComplete);
-    int         isMotorMoving(bool &bMoving);
 
     // getter and setter
     void        setDebugLog(bool bEnable) {m_bDebugLog = bEnable; };
 
     int         getFirmwareVersion(char *pszVersion, int nStrMaxLen);
     int         getTemperature(double &dTemperature);
+    int         getTemperature(int nSource, double &dTemperature);
     int         getPosition(int &nPosition);
     int         getPosLimit(void);
-    void        setPosLimit(int nLimit);
     
+    int         setFanOn(bool bOn);
+    void        getFanState(bool &bOn);
+    
+    void        setTemperatureSource(int nSource);
+    void        getTemperatureSource(int &nSource);
+
 protected:
 
-    void            parseGeneralResponse(byte *Buffer, int nLength);
+    bool            parseResponse(byte *Buffer, int nLength);
     int             Get32(const byte *buffer, int position);
     int             Get16(const byte *buffer, int position);
     
@@ -108,7 +118,6 @@ protected:
 
     bool            m_HIDInitOk;
     hid_device      *m_DevHandle;
-    byte            m_HIDBuffer[DATA_BUFFER_SIZE];
     
     bool            m_bDebugLog;
     bool            m_bIsConnected;
@@ -117,7 +126,6 @@ protected:
 
     int             m_nTargetPos;
     bool            m_bPosLimitEnabled;
-    bool            m_bMoving;
 
     int             m_nTempSource;
     int             m_nCurPos;
@@ -126,15 +134,18 @@ protected:
     bool            m_bFanIsOn;
     bool            m_bIsHold;
     std::string     m_sVersion;
-    int             m_nStepPerMillimeter;
+    double          m_dMillimetersPerStep;
     int             m_nMaxPos;
     float           m_fAirTemp;
     float           m_fTubeTemp;
     float           m_fMirorTemp;
     
+    CStopWatch      m_cmdTimer;
+    CStopWatch      m_gotoTimer;
+    
 #ifdef PLUGIN_DEBUG
     void            hexdump(const byte *inputData, byte *outBuffer, int size);
-    
+    std::string m_sPlatform;
     std::string m_sLogfilePath;
     // timestamp for logs
     char *timestamp;
