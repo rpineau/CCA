@@ -9,17 +9,12 @@
 
 CCCAController::CCCAController()
 {
-
-
     m_bDebugLog = false;
     m_bIsConnected = false;
-
     m_nCurPos = 0;
     m_nTargetPos = 0;
-    m_DevHandle = nullptr;
-
     m_nTempSource = AIR;
-    
+    m_DevHandle = nullptr;
     m_bIsAtOrigin = false;
     m_bIsMoving = false;
     m_bFanIsOn = false;
@@ -59,21 +54,6 @@ CCCAController::CCCAController()
     fprintf(Logfile, "[%s] [CCCAController::CCCAController] Constructor Called.\n", timestamp);
     fflush(Logfile);
 #endif
-
-    
-    if (hid_init()) {
-        m_HIDInitOk = false;
-#if defined PLUGIN_DEBUG && PLUGIN_DEBUG >= 2
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::CCCAController] hid_init call failed !!!\n", timestamp);
-        fflush(Logfile);
-#endif
-    }
-    else {
-        m_HIDInitOk = true;
-    }
 }
 
 CCCAController::~CCCAController()
@@ -83,8 +63,6 @@ CCCAController::~CCCAController()
     if (Logfile)
         fclose(Logfile);
 #endif
-    if(m_HIDInitOk)
-        hid_exit();
 }
 
 int CCCAController::Connect()
@@ -130,7 +108,6 @@ int CCCAController::Connect()
 
 void CCCAController::Disconnect()
 {
-
 #ifdef PLUGIN_DEBUG
         ltime = time(NULL);
         timestamp = asctime(localtime(&ltime));
@@ -141,17 +118,18 @@ void CCCAController::Disconnect()
     
     if(m_bIsConnected)
             hid_close(m_DevHandle);
-    
+
+    hid_exit();
+
     m_DevHandle = nullptr;
 	m_bIsConnected = false;
 #ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::Disconnect] disconnected from device \n", timestamp);
-        fflush(Logfile);
+    ltime = time(NULL);
+    timestamp = asctime(localtime(&ltime));
+    timestamp[strlen(timestamp) - 1] = 0;
+    fprintf(Logfile, "[%s] [CCCAController::Disconnect] disconnected from device \n", timestamp);
+    fflush(Logfile);
 #endif
-
 }
 
 #pragma mark move commands
@@ -174,7 +152,7 @@ int CCCAController::haltFocuser()
 
     #ifdef PLUGIN_DEBUG
         byte hexBuffer[DATA_BUFFER_SIZE];
-        hexdump(cHIDBuffer, hexBuffer, 3);
+        hexdump(cHIDBuffer, hexBuffer, REPORT_1_SIZE);
         ltime = time(NULL);
         timestamp = asctime(localtime(&ltime));
         timestamp[strlen(timestamp) - 1] = 0;
@@ -182,8 +160,7 @@ int CCCAController::haltFocuser()
         fflush(Logfile);
     #endif
 
-        
-        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, 3);
+        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
         if(nByteWriten<0)
             nErr = ERR_CMDFAILED;
     }
@@ -224,7 +201,7 @@ int CCCAController::gotoPosition(int nPos)
         
     #ifdef PLUGIN_DEBUG
         byte hexBuffer[DATA_BUFFER_SIZE];
-        hexdump(cHIDBuffer, hexBuffer, 8);
+        hexdump(cHIDBuffer, hexBuffer, REPORT_0_SIZE);
         ltime = time(NULL);
         timestamp = asctime(localtime(&ltime));
         timestamp[strlen(timestamp) - 1] = 0;
@@ -232,7 +209,7 @@ int CCCAController::gotoPosition(int nPos)
         fflush(Logfile);
     #endif
 
-        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, 8);
+        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_0_SIZE);
         if(nByteWriten<0)
             nErr = ERR_CMDFAILED;
 
@@ -295,11 +272,11 @@ int CCCAController::isGoToComplete(bool &bComplete)
     if(m_nCurPos != m_nTargetPos) {
         // we have an error as we're not moving but not at the target position
 #ifdef PLUGIN_DEBUG
-    ltime = time(NULL);
-    timestamp = asctime(localtime(&ltime));
-    timestamp[strlen(timestamp) - 1] = 0;
-    fprintf(Logfile, "[%s] [CCCAController::isGoToComplete] **** ERROR **** Not moving and not at the target position\n", timestamp);
-    fflush(Logfile);
+        ltime = time(NULL);
+        timestamp = asctime(localtime(&ltime));
+        timestamp[strlen(timestamp) - 1] = 0;
+        fprintf(Logfile, "[%s] [CCCAController::isGoToComplete] **** ERROR **** Not moving and not at the target position\n", timestamp);
+        fflush(Logfile);
 #endif
         m_nTargetPos = m_nCurPos;
         nErr = ERR_CMDFAILED;
@@ -335,7 +312,7 @@ int CCCAController::getFirmwareVersion(char *pszVersion, int nStrMaxLen)
 
 #ifdef PLUGIN_DEBUG
     byte hexBuffer[DATA_BUFFER_SIZE];
-    hexdump(cHIDBuffer, hexBuffer, 3);
+    hexdump(cHIDBuffer, hexBuffer, REPORT_1_SIZE);
     ltime = time(NULL);
     timestamp = asctime(localtime(&ltime));
     timestamp[strlen(timestamp) - 1] = 0;
@@ -343,7 +320,7 @@ int CCCAController::getFirmwareVersion(char *pszVersion, int nStrMaxLen)
     fflush(Logfile);
 #endif
 
-    nByteWriten = hid_write(m_DevHandle, cHIDBuffer, 3);
+    nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
     if(nByteWriten<0)
         nErr = ERR_CMDFAILED;
 
@@ -404,7 +381,6 @@ int CCCAController::getTemperature(int nSource, double &dTemperature)
 
 int CCCAController::getPosition(int &nPosition)
 {
-
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
     int nbRead;
@@ -417,7 +393,7 @@ int CCCAController::getPosition(int &nPosition)
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
 
-    if(m_cmdTimer.GetElapsedSeconds()>1.0) {
+    if(m_cmdTimer.GetElapsedSeconds()>1.0 && !m_bIsMoving) {
         m_cmdTimer.Reset();
         cHIDBuffer[0] = 0x01; // report ID
         cHIDBuffer[1] = DUMMY; // dummy command to get a report to get version
@@ -425,7 +401,7 @@ int CCCAController::getPosition(int &nPosition)
 
     #ifdef PLUGIN_DEBUG
         byte hexBuffer[DATA_BUFFER_SIZE];
-        hexdump(cHIDBuffer, hexBuffer, 3);
+        hexdump(cHIDBuffer, hexBuffer, REPORT_1_SIZE);
         ltime = time(NULL);
         timestamp = asctime(localtime(&ltime));
         timestamp[strlen(timestamp) - 1] = 0;
@@ -433,7 +409,7 @@ int CCCAController::getPosition(int &nPosition)
         fflush(Logfile);
     #endif
 
-        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, 3);
+        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
         if(nByteWriten<0)
             nErr = ERR_CMDFAILED;
     #ifdef PLUGIN_DEBUG
@@ -480,7 +456,6 @@ int CCCAController::setFanOn(bool bOn)
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
 
-    
     cHIDBuffer[0] = 0x01; // report ID
     if(bOn)
         cHIDBuffer[1] = FAN_ON; // command
@@ -491,7 +466,7 @@ int CCCAController::setFanOn(bool bOn)
 
 #ifdef PLUGIN_DEBUG
     byte hexBuffer[DATA_BUFFER_SIZE];
-    hexdump(cHIDBuffer, hexBuffer, 3);
+    hexdump(cHIDBuffer, hexBuffer, REPORT_1_SIZE);
     ltime = time(NULL);
     timestamp = asctime(localtime(&ltime));
     timestamp[strlen(timestamp) - 1] = 0;
@@ -499,7 +474,7 @@ int CCCAController::setFanOn(bool bOn)
     fflush(Logfile);
 #endif
 
-    nByteWriten = hid_write(m_DevHandle, cHIDBuffer, 3);
+    nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
     if(nByteWriten<0) {
         nErr = ERR_CMDFAILED;
     }

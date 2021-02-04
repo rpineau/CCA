@@ -45,6 +45,8 @@
 #define DATA_BUFFER_SIZE    64
 #define MAX_TIMEOUT         1000
 #define LOG_BUFFER_SIZE     256
+#define REPORT_0_SIZE   8
+#define REPORT_1_SIZE   3
 
 #define VENDOR_ID   0x20E1
 #define PRODUCT_ID  0x0002
@@ -116,7 +118,6 @@ protected:
     
     SleeperInterface    *m_pSleeper;
 
-    bool            m_HIDInitOk;
     hid_device      *m_DevHandle;
     
     bool            m_bDebugLog;
