@@ -28,7 +28,6 @@ X2Focuser::X2Focuser(const char* pszDisplayName,
         m_CCAController.setTemperatureSource(nTmp);
     }
     m_CCAController.setSleeper(m_pSleeper);
-
 }
 
 X2Focuser::~X2Focuser()

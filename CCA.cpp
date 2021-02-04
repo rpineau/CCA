@@ -7,6 +7,40 @@
 
 #include "CCA.h"
 
+std::promise<void> exitSignal;
+std::future<void> futureObj = exitSignal.get_future();
+std::promise<void> exitSignalSender;
+std::future<void> futureObjSender = exitSignalSender.get_future();
+std::thread th;
+std::thread thSender;
+hid_device *globalDeviceHandle;
+CCCAController *globalCCAController = nullptr;
+
+
+void threaded_sender(std::future<void> futureObjSender)
+{
+
+    while (futureObjSender.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout) {
+
+        const unsigned char data[3] = {0x01, DUMMY, 0x00};
+        hid_write(globalDeviceHandle, data, sizeof(data));
+    }
+}
+
+void threaded_poller(std::future<void> futureObj)
+{
+    byte cHIDBuffer[DATA_BUFFER_SIZE];
+    int nbRead;
+    
+    while (futureObj.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
+        nbRead = hid_read(globalDeviceHandle, cHIDBuffer, sizeof(cHIDBuffer));
+        if(nbRead>0){
+            if(globalCCAController)
+                globalCCAController->parseResponse(cHIDBuffer, nbRead);
+        }
+    }
+}
+
 CCCAController::CCCAController()
 {
     m_bDebugLog = false;
@@ -28,6 +62,7 @@ CCCAController::CCCAController()
 
     m_cmdTimer.Reset();
     
+
 #ifdef PLUGIN_DEBUG
 #if defined(SB_WIN_BUILD)
     m_sLogfilePath = getenv("HOMEDRIVE");
@@ -63,6 +98,8 @@ CCCAController::~CCCAController()
     if (Logfile)
         fclose(Logfile);
 #endif
+    globalCCAController = nullptr;
+    
 }
 
 int CCCAController::Connect()
@@ -103,6 +140,12 @@ int CCCAController::Connect()
     // Set the hid_read() function to be non-blocking.
     hid_set_nonblocking(m_DevHandle, 1);
     
+    globalDeviceHandle = m_DevHandle;
+    globalCCAController = this;
+    th = std::thread(&threaded_poller, std::move(futureObj));
+    thSender = std::thread(&threaded_sender, std::move(futureObjSender));
+    m_ThreadsAreRunning = true;
+    
     return nErr;
 }
 
@@ -112,13 +155,34 @@ void CCCAController::Disconnect()
         ltime = time(NULL);
         timestamp = asctime(localtime(&ltime));
         timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::Disconnect] disconnecting from device \n", timestamp);
+        fprintf(Logfile, "[%s] [CCCAController::Disconnect] disconnecting from device\n", timestamp);
         fflush(Logfile);
 #endif
+
+    if(m_ThreadsAreRunning) {
+        exitSignal.set_value();
+        exitSignalSender.set_value();
+#ifdef PLUGIN_DEBUG
+        ltime = time(NULL);
+        timestamp = asctime(localtime(&ltime));
+        timestamp[strlen(timestamp) - 1] = 0;
+        fprintf(Logfile, "[%s] [CCCAController::Disconnect] Waiting for threads to exit\n", timestamp);
+        fflush(Logfile);
+#endif
+        th.join();
+        thSender.join();
+    }
     
     if(m_bIsConnected)
             hid_close(m_DevHandle);
 
+#ifdef PLUGIN_DEBUG
+        ltime = time(NULL);
+        timestamp = asctime(localtime(&ltime));
+        timestamp[strlen(timestamp) - 1] = 0;
+        fprintf(Logfile, "[%s] [CCCAController::Disconnect] calling hid_exit\n", timestamp);
+        fflush(Logfile);
+#endif
     hid_exit();
 
     m_DevHandle = nullptr;
@@ -127,7 +191,7 @@ void CCCAController::Disconnect()
     ltime = time(NULL);
     timestamp = asctime(localtime(&ltime));
     timestamp[strlen(timestamp) - 1] = 0;
-    fprintf(Logfile, "[%s] [CCCAController::Disconnect] disconnected from device \n", timestamp);
+    fprintf(Logfile, "[%s] [CCCAController::Disconnect] disconnected from device\n", timestamp);
     fflush(Logfile);
 #endif
 }
@@ -382,6 +446,7 @@ int CCCAController::getTemperature(int nSource, double &dTemperature)
 int CCCAController::getPosition(int &nPosition)
 {
     int nErr = PLUGIN_OK;
+    /*
     int nByteWriten = 0;
     int nbRead;
     byte cHIDBuffer[DATA_BUFFER_SIZE + 1];
@@ -392,7 +457,6 @@ int CCCAController::getPosition(int &nPosition)
 
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
-
     if(m_cmdTimer.GetElapsedSeconds()>1.0 && !m_bIsMoving) {
         m_cmdTimer.Reset();
         cHIDBuffer[0] = 0x01; // report ID
@@ -432,6 +496,7 @@ int CCCAController::getPosition(int &nPosition)
 #endif
         parseResponse(cRespBuffer, nbRead);
     }
+ */
     nPosition = m_nCurPos;
 
     return nErr;

@@ -34,8 +34,6 @@ class MutexInterface;
 class BasicIniUtilInterface;
 class TickCountInterface;
 
-
-
 #define PARENT_KEY			"CCA"
 #define TEMP_SOURCE           "TempSource"
 

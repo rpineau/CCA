@@ -30,6 +30,9 @@
 #include <typeinfo>
 #include <stdexcept>
 
+#include <future>
+#include <chrono>
+
 #include "../../licensedinterfaces/sberrorx.h"
 #include "../../licensedinterfaces/serxinterface.h"
 #include "../../licensedinterfaces/loggerinterface.h"
@@ -110,9 +113,10 @@ public:
     void        setTemperatureSource(int nSource);
     void        getTemperatureSource(int &nSource);
 
+    bool        parseResponse(byte *Buffer, int nLength);
+
 protected:
 
-    bool            parseResponse(byte *Buffer, int nLength);
     int             Get32(const byte *buffer, int position);
     int             Get16(const byte *buffer, int position);
     
@@ -143,7 +147,8 @@ protected:
     
     CStopWatch      m_cmdTimer;
     CStopWatch      m_gotoTimer;
-    
+    bool            m_ThreadsAreRunning;
+
 #ifdef PLUGIN_DEBUG
     void            hexdump(const byte *inputData, byte *outBuffer, int size);
     std::string m_sPlatform;
