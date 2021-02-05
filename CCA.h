@@ -113,7 +113,7 @@ public:
     void        setTemperatureSource(int nSource);
     void        getTemperatureSource(int &nSource);
 
-    bool        parseResponse(byte *Buffer, int nLength);
+    void        parseResponse(byte *Buffer, int nLength);
 
 protected:
 

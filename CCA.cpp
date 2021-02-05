@@ -13,7 +13,7 @@ std::promise<void> exitSignalSender;
 std::future<void> futureObjSender = exitSignalSender.get_future();
 std::thread th;
 std::thread thSender;
-hid_device *globalDeviceHandle;
+hid_device *globalDeviceHandle = nullptr;
 CCCAController *globalCCAController = nullptr;
 
 
@@ -22,8 +22,10 @@ void threaded_sender(std::future<void> futureObjSender)
 
     while (futureObjSender.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout) {
 
-        const unsigned char data[3] = {0x01, DUMMY, 0x00};
-        hid_write(globalDeviceHandle, data, sizeof(data));
+        const byte cmdData[3] = {0x01, DUMMY, 0x00};
+        if(globalDeviceHandle) {
+            hid_write(globalDeviceHandle, cmdData, sizeof(cmdData));
+        }
     }
 }
 
@@ -33,10 +35,13 @@ void threaded_poller(std::future<void> futureObj)
     int nbRead;
     
     while (futureObj.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
-        nbRead = hid_read(globalDeviceHandle, cHIDBuffer, sizeof(cHIDBuffer));
-        if(nbRead>0){
-            if(globalCCAController)
-                globalCCAController->parseResponse(cHIDBuffer, nbRead);
+        if(globalDeviceHandle) {
+            nbRead = hid_read(globalDeviceHandle, cHIDBuffer, sizeof(cHIDBuffer));
+            if(nbRead>0){
+                if(globalCCAController) {
+                    globalCCAController->parseResponse(cHIDBuffer, nbRead);
+                }
+            }
         }
     }
 }
@@ -85,7 +90,7 @@ CCCAController::CCCAController()
     ltime = time(NULL);
     timestamp = asctime(localtime(&ltime));
     timestamp[strlen(timestamp) - 1] = 0;
-    fprintf(Logfile, "[%s] [CCCAController::CCCAController] Version %3.2f build 2021_02_03_1630 on %s.\n", timestamp, PLUGIN_VERSION, m_sPlatform.c_str());
+    fprintf(Logfile, "[%s] [CCCAController::CCCAController] Version %3.2f build 2021_02_05_1500 on %s.\n", timestamp, PLUGIN_VERSION, m_sPlatform.c_str());
     fprintf(Logfile, "[%s] [CCCAController::CCCAController] Constructor Called.\n", timestamp);
     fflush(Logfile);
 #endif
@@ -93,12 +98,14 @@ CCCAController::CCCAController()
 
 CCCAController::~CCCAController()
 {
+    if(m_bIsConnected)
+        Disconnect();
+    
 #ifdef	PLUGIN_DEBUG
     // Close LogFile
     if (Logfile)
         fclose(Logfile);
 #endif
-    globalCCAController = nullptr;
     
 }
 
@@ -171,6 +178,7 @@ void CCCAController::Disconnect()
 #endif
         th.join();
         thSender.join();
+        m_ThreadsAreRunning = false;
     }
     
     if(m_bIsConnected)
@@ -186,6 +194,7 @@ void CCCAController::Disconnect()
     hid_exit();
 
     m_DevHandle = nullptr;
+    globalDeviceHandle = nullptr;
 	m_bIsConnected = false;
 #ifdef PLUGIN_DEBUG
     ltime = time(NULL);
@@ -215,7 +224,7 @@ int CCCAController::haltFocuser()
         cHIDBuffer[2] = 0x00;
 
     #ifdef PLUGIN_DEBUG
-        byte hexBuffer[DATA_BUFFER_SIZE];
+        byte hexBuffer[DATA_BUFFER_SIZE * 4];
         hexdump(cHIDBuffer, hexBuffer, REPORT_1_SIZE);
         ltime = time(NULL);
         timestamp = asctime(localtime(&ltime));
@@ -264,7 +273,7 @@ int CCCAController::gotoPosition(int nPos)
         cHIDBuffer[7] = 0x00;
         
     #ifdef PLUGIN_DEBUG
-        byte hexBuffer[DATA_BUFFER_SIZE];
+        byte hexBuffer[DATA_BUFFER_SIZE * 4];
         hexdump(cHIDBuffer, hexBuffer, REPORT_0_SIZE);
         ltime = time(NULL);
         timestamp = asctime(localtime(&ltime));
@@ -353,12 +362,6 @@ int CCCAController::isGoToComplete(bool &bComplete)
 int CCCAController::getFirmwareVersion(char *pszVersion, int nStrMaxLen)
 {
     int nErr = PLUGIN_OK;
-    int nByteWriten = 0;
-    int nbRead;
-    byte cHIDBuffer[DATA_BUFFER_SIZE + 1];
-    byte cRespBuffer[DATA_BUFFER_SIZE];
-    bool bGotReponse = false;
-    int nTimeout = 0;
     
     if(!m_bIsConnected)
         return ERR_COMMNOLINK;
@@ -368,38 +371,7 @@ int CCCAController::getFirmwareVersion(char *pszVersion, int nStrMaxLen)
 
     if(m_sVersion.size()) {
         strncpy(pszVersion, m_sVersion.c_str(), nStrMaxLen);
-        return nErr;
     }
-    cHIDBuffer[0] = 0x01; // report ID
-    cHIDBuffer[1] = DUMMY; // dummy command to get a report to get version
-    cHIDBuffer[2] = 0x00;
-
-#ifdef PLUGIN_DEBUG
-    byte hexBuffer[DATA_BUFFER_SIZE];
-    hexdump(cHIDBuffer, hexBuffer, REPORT_1_SIZE);
-    ltime = time(NULL);
-    timestamp = asctime(localtime(&ltime));
-    timestamp[strlen(timestamp) - 1] = 0;
-    fprintf(Logfile, "[%s] [CCCAController::getFirmwareVersion] sending : %s\n", timestamp, hexBuffer);
-    fflush(Logfile);
-#endif
-
-    nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
-    if(nByteWriten<0)
-        nErr = ERR_CMDFAILED;
-
-    do {
-        m_pSleeper->sleep(1000);
-        nbRead = hid_read(m_DevHandle, cRespBuffer, DATA_BUFFER_SIZE);
-        if(nbRead > 0)
-            bGotReponse = parseResponse(cRespBuffer, nbRead);
-        nTimeout++;
-        if(nTimeout>5) // 5 second timeout !
-            break;
-    } while(!bGotReponse);
-    
-    if(bGotReponse)
-        strncpy(pszVersion, m_sVersion.c_str(), nStrMaxLen);
     else
         strncpy(pszVersion, "NA", nStrMaxLen);
 
@@ -464,7 +436,7 @@ int CCCAController::getPosition(int &nPosition)
         cHIDBuffer[2] = 0x00;
 
     #ifdef PLUGIN_DEBUG
-        byte hexBuffer[DATA_BUFFER_SIZE];
+        byte hexBuffer[DATA_BUFFER_SIZE * 4];
         hexdump(cHIDBuffer, hexBuffer, REPORT_1_SIZE);
         ltime = time(NULL);
         timestamp = asctime(localtime(&ltime));
@@ -530,7 +502,7 @@ int CCCAController::setFanOn(bool bOn)
     cHIDBuffer[2] = 0x00;
 
 #ifdef PLUGIN_DEBUG
-    byte hexBuffer[DATA_BUFFER_SIZE];
+    byte hexBuffer[DATA_BUFFER_SIZE * 4];
     hexdump(cHIDBuffer, hexBuffer, REPORT_1_SIZE);
     ltime = time(NULL);
     timestamp = asctime(localtime(&ltime));
@@ -566,12 +538,11 @@ void CCCAController::getTemperatureSource(int &nSource)
 #pragma mark command and response functions
 
 
-bool CCCAController::parseResponse(byte *Buffer, int nLength)
+void CCCAController::parseResponse(byte *Buffer, int nLength)
 {
 
-    bool bGotResponse = false;
 #ifdef PLUGIN_DEBUG
-        byte hexBuffer[DATA_BUFFER_SIZE];
+        byte hexBuffer[DATA_BUFFER_SIZE * 4];
         hexdump(Buffer, hexBuffer, (nLength > DATA_BUFFER_SIZE-1 ? DATA_BUFFER_SIZE -1 : nLength));
         ltime = time(NULL);
         timestamp = asctime(localtime(&ltime));
@@ -580,15 +551,14 @@ bool CCCAController::parseResponse(byte *Buffer, int nLength)
         fflush(Logfile);
 #endif
 
-    if(Buffer[0] == 0x3C) {
-        bGotResponse = true;
+     if(Buffer[0] == 0x3C) {
         m_nCurPos               = Get32(Buffer, 2);
         m_bIsAtOrigin           = (Buffer[7] & 128) != 0;
         m_bIsMoving             = (Buffer[7] &  64) != 0;
         m_bFanIsOn              = (Buffer[7] &  32) != 0;
         m_bIsHold               = (Buffer[7] &   3) != 0;
         m_sVersion              = std::to_string(Get16(Buffer, 17)>>8) + "." + std::to_string(Get16(Buffer, 17) & 0xFF);
-        m_dMillimetersPerStep    = Get16(Buffer,23) / 1000000.0;
+        m_dMillimetersPerStep   = Get16(Buffer,23) / 1000000.0;
         m_nMaxPos               = Get32(Buffer, 25);
         m_fAirTemp              = Get32(Buffer, 45) / 10.0;
         m_fTubeTemp             = Get32(Buffer, 49) / 10.0;
@@ -603,16 +573,13 @@ bool CCCAController::parseResponse(byte *Buffer, int nLength)
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bFanIsOn            : %s\n", timestamp, m_bFanIsOn?"Yes":"No");
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bIsHold             : %s\n", timestamp, m_bIsHold?"Yes":"No");
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_sVersion            : %s\n", timestamp, m_sVersion.c_str());
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nCurPos             : %d\n", timestamp, m_nCurPos);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_dMillimetersPerStep : %f\n", timestamp, m_dMillimetersPerStep);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nMaxPos             : %d\n", timestamp, m_nMaxPos);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fAirTemp            : %3.2f\n", timestamp, m_fAirTemp);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fTubeTemp           : %3.2f\n", timestamp, m_fTubeTemp);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fMirorTemp          : %3.2f\n", timestamp, m_fMirorTemp);
-        fflush(Logfile);
 #endif
     }
-
-    return bGotResponse;
 }
 
 int CCCAController::Get32(const byte *buffer, int position)

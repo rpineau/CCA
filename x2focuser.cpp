@@ -185,8 +185,6 @@ int	X2Focuser::execModalSettingsDialog(void)
     X2MutexLocker ml(GetMutex());
 	// set controls values
     if(m_bLinked) {
-        m_CCAController.getTemperatureSource(nTmp);
-        dx->setCurrentIndex("comboBox", nTmp);
         m_CCAController.getFanState(bTmp);
         if(bTmp)
             dx->setChecked("radioButton", 1);
@@ -206,12 +204,14 @@ int	X2Focuser::execModalSettingsDialog(void)
         dx->setText("mirrorTemp", szTmp);
     }
     else {
-        dx->setEnabled("comboBox",false);
         dx->setEnabled("radioButton",false);
         dx->setText("airTemp", "");
         dx->setText("tubeTemp", "");
         dx->setText("mirrorTemp", "");
     }
+    // This doesn't require to be connected as this is the user selection of what temperature source he wants reported to TSX
+    m_CCAController.getTemperatureSource(nTmp);
+    dx->setCurrentIndex("comboBox", nTmp);
 
     //Display the user interface
     mUiEnabled = true;
