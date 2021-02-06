@@ -185,21 +185,21 @@ int	X2Focuser::execModalSettingsDialog(void)
     X2MutexLocker ml(GetMutex());
 	// set controls values
     if(m_bLinked) {
-        m_CCAController.getFanState(bTmp);
+        bTmp = m_CCAController.getFanState();
         if(bTmp)
             dx->setChecked("radioButton", 1);
         else
             dx->setChecked("radioButton", 1);
 
-        m_CCAController.getTemperature(AIR, dTemperature);
+        dTemperature = m_CCAController.getTemperature(AIR);
         snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
         dx->setText("airTemp", szTmp);
         
-        m_CCAController.getTemperature(TUBE, dTemperature);
+        dTemperature = m_CCAController.getTemperature(TUBE);
         snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
         dx->setText("tubeTemp", szTmp);
         
-        m_CCAController.getTemperature(MIRROR, dTemperature);
+        dTemperature = m_CCAController.getTemperature(MIRROR);
         snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
         dx->setText("mirrorTemp", szTmp);
     }
@@ -210,7 +210,7 @@ int	X2Focuser::execModalSettingsDialog(void)
         dx->setText("mirrorTemp", "");
     }
     // This doesn't require to be connected as this is the user selection of what temperature source he wants reported to TSX
-    m_CCAController.getTemperatureSource(nTmp);
+    nTmp = m_CCAController.getTemperatureSource();
     dx->setCurrentIndex("comboBox", nTmp);
 
     //Display the user interface
@@ -236,15 +236,15 @@ void X2Focuser::uiEvent(X2GUIExchangeInterface* uiex, const char* pszEvent)
 
     if (!strcmp(pszEvent, "on_timer")) {
         if(m_bLinked) {
-            m_CCAController.getTemperature(AIR, dTemperature);
+            dTemperature = m_CCAController.getTemperature(AIR);
             snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
             uiex->setText("airTemp", szTmp);
             
-            m_CCAController.getTemperature(TUBE, dTemperature);
+            dTemperature = m_CCAController.getTemperature(TUBE);
             snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
             uiex->setText("tubeTemp", szTmp);
             
-            m_CCAController.getTemperature(MIRROR, dTemperature);
+            dTemperature = m_CCAController.getTemperature(MIRROR);
             snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
             uiex->setText("mirrorTemp", szTmp);
         }
@@ -262,16 +262,14 @@ void X2Focuser::uiEvent(X2GUIExchangeInterface* uiex, const char* pszEvent)
 #pragma mark - FocuserGotoInterface2
 int	X2Focuser::focPosition(int& nPosition)
 {
-    int nErr;
-
     if(!m_bLinked)
         return NOT_CONNECTED;
 
     X2MutexLocker ml(GetMutex());
 
-    nErr = m_CCAController.getPosition(nPosition);
+    nPosition = m_CCAController.getPosition();
     m_nPosition = nPosition;
-    return nErr;
+    return SB_OK;
 }
 
 int	X2Focuser::focMinimumLimit(int& nMinLimit) 		
@@ -327,13 +325,12 @@ int	X2Focuser::isCompleteFocGoto(bool& bComplete) const
 
 int	X2Focuser::endFocGoto(void)
 {
-    int nErr;
     if(!m_bLinked)
         return NOT_CONNECTED;
 
     X2MutexLocker ml(GetMutex());
-    nErr = m_CCAController.getPosition(m_nPosition);
-    return nErr;
+    m_nPosition = m_CCAController.getPosition();
+    return SB_OK;
 }
 
 int X2Focuser::amountCountFocGoto(void) const					

@@ -99,19 +99,17 @@ public:
     int         isGoToComplete(bool &bComplete);
 
     // getter and setter
-    void        setDebugLog(bool bEnable) {m_bDebugLog = bEnable; };
-
     int         getFirmwareVersion(char *pszVersion, int nStrMaxLen);
-    int         getTemperature(double &dTemperature);
-    int         getTemperature(int nSource, double &dTemperature);
-    int         getPosition(int &nPosition);
+    double      getTemperature();
+    double      getTemperature(int nSource);
+    int         getPosition(void);
     int         getPosLimit(void);
     
     int         setFanOn(bool bOn);
-    void        getFanState(bool &bOn);
+    bool        getFanState();
     
     void        setTemperatureSource(int nSource);
-    void        getTemperatureSource(int &nSource);
+    int         getTemperatureSource();
 
     void        parseResponse(byte *Buffer, int nLength);
 

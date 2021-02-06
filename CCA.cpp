@@ -341,7 +341,7 @@ int CCCAController::isGoToComplete(bool &bComplete)
     }
     bComplete = true;
 
-    getPosition(m_nCurPos);
+    m_nCurPos = getPosition();
     if(m_nCurPos != m_nTargetPos) {
         // we have an error as we're not moving but not at the target position
 #ifdef PLUGIN_DEBUG
@@ -378,100 +378,48 @@ int CCCAController::getFirmwareVersion(char *pszVersion, int nStrMaxLen)
     return nErr;
 }
 
-int CCCAController::getTemperature(double &dTemperature)
+double CCCAController::getTemperature()
 {
-    int nErr = PLUGIN_OK;
     // need to allow user to select the focuser temp source
     switch(m_nTempSource) {
         case AIR:
-            dTemperature = m_fAirTemp;
+            return m_fAirTemp;
             break;
         case TUBE:
-            dTemperature = m_fTubeTemp;
+            return m_fTubeTemp;
             break;
         case MIRROR:
-            dTemperature = m_fMirorTemp;
+            return  m_fMirorTemp;
+            break;
+        default:
+            return m_fAirTemp;
             break;
     }
-    return nErr;
 }
 
-int CCCAController::getTemperature(int nSource, double &dTemperature)
+double CCCAController::getTemperature(int nSource)
 {
-    int nErr = PLUGIN_OK;
-    // need to allow user to select the focuser temp source
     switch(nSource) {
         case AIR:
-            dTemperature = m_fAirTemp;
+            return m_fAirTemp;
             break;
         case TUBE:
-            dTemperature = m_fTubeTemp;
+            return m_fTubeTemp;
             break;
         case MIRROR:
-            dTemperature = m_fMirorTemp;
+            return m_fMirorTemp;
+            break;
+        default:
+            return m_fAirTemp;
             break;
     }
-    return nErr;
 }
 
 
-int CCCAController::getPosition(int &nPosition)
+int CCCAController::getPosition()
 {
-    int nErr = PLUGIN_OK;
-    /*
-    int nByteWriten = 0;
-    int nbRead;
-    byte cHIDBuffer[DATA_BUFFER_SIZE + 1];
-    byte cRespBuffer[DATA_BUFFER_SIZE];
-    
-    if(!m_bIsConnected)
-        return ERR_COMMNOLINK;
 
-    if(!m_DevHandle)
-        return ERR_COMMNOLINK;
-    if(m_cmdTimer.GetElapsedSeconds()>1.0 && !m_bIsMoving) {
-        m_cmdTimer.Reset();
-        cHIDBuffer[0] = 0x01; // report ID
-        cHIDBuffer[1] = DUMMY; // dummy command to get a report to get version
-        cHIDBuffer[2] = 0x00;
-
-    #ifdef PLUGIN_DEBUG
-        byte hexBuffer[DATA_BUFFER_SIZE * 4];
-        hexdump(cHIDBuffer, hexBuffer, REPORT_1_SIZE);
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::getPosition] sending : %s\n", timestamp, hexBuffer);
-        fflush(Logfile);
-    #endif
-
-        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
-        if(nByteWriten<0)
-            nErr = ERR_CMDFAILED;
-    #ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::getPosition] nByteWriten = %d\n", timestamp, nByteWriten);
-        fflush(Logfile);
-    #endif
-    }
-
-    nbRead = hid_read(m_DevHandle, cRespBuffer, DATA_BUFFER_SIZE);
-    if(nbRead > 0) {
-#ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::getPosition] nbRead = %d\n", timestamp, nbRead);
-        fflush(Logfile);
-#endif
-        parseResponse(cRespBuffer, nbRead);
-    }
- */
-    nPosition = m_nCurPos;
-
-    return nErr;
+    return m_nCurPos;
 }
 
 
@@ -519,9 +467,9 @@ int CCCAController::setFanOn(bool bOn)
     return nErr;
 }
 
-void CCCAController::getFanState(bool &bOn)
+bool CCCAController::getFanState()
 {
-    bOn = m_bFanIsOn;
+    return m_bFanIsOn;
 }
 
 void CCCAController::setTemperatureSource(int nSource)
@@ -529,9 +477,9 @@ void CCCAController::setTemperatureSource(int nSource)
     m_nTempSource = nSource;
 }
 
-void CCCAController::getTemperatureSource(int &nSource)
+int CCCAController::getTemperatureSource()
 {
-    nSource = m_nTempSource;
+    return m_nTempSource;
 
 }
 
