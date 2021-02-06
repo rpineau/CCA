@@ -43,7 +43,7 @@
 
 #define PLUGIN_VERSION      1.0
 
-#define PLUGIN_DEBUG 3
+// #define PLUGIN_DEBUG 3
 
 #define DATA_BUFFER_SIZE    64
 #define MAX_TIMEOUT         1000

@@ -367,7 +367,7 @@ int X2Focuser::focTemperature(double &dTemperature)
     }
     X2MutexLocker ml(GetMutex());
 
-    nErr = m_CCAController.getTemperature(dTemperature);
+    dTemperature = m_CCAController.getTemperature();
 
 
     return nErr;

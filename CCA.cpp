@@ -90,7 +90,7 @@ CCCAController::CCCAController()
     ltime = time(NULL);
     timestamp = asctime(localtime(&ltime));
     timestamp[strlen(timestamp) - 1] = 0;
-    fprintf(Logfile, "[%s] [CCCAController::CCCAController] Version %3.2f build 2021_02_05_1500 on %s.\n", timestamp, PLUGIN_VERSION, m_sPlatform.c_str());
+    fprintf(Logfile, "[%s] [CCCAController::CCCAController] Version %3.2f build 2021_02_05_1705 on %s.\n", timestamp, PLUGIN_VERSION, m_sPlatform.c_str());
     fprintf(Logfile, "[%s] [CCCAController::CCCAController] Constructor Called.\n", timestamp);
     fflush(Logfile);
 #endif
@@ -255,7 +255,12 @@ int CCCAController::gotoPosition(int nPos)
     if (nPos>m_nMaxPos)
         return ERR_LIMITSEXCEEDED;
 
+#ifdef SB_WIN_BUILD
+    if(!m_bIsMoving) {
+#else
     if(m_bIsHold && !m_bIsMoving) {
+#endif
+        
     #ifdef PLUGIN_DEBUG
         ltime = time(NULL);
         timestamp = asctime(localtime(&ltime));
