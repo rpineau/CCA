@@ -7,29 +7,19 @@
 
 #include "CCA.h"
 
-std::promise<void> exitSignal;
-std::future<void> futureObj = exitSignal.get_future();
-std::promise<void> exitSignalSender;
-std::future<void> futureObjSender = exitSignalSender.get_future();
-std::thread th;
-std::thread thSender;
-hid_device *globalDeviceHandle = nullptr;
-CCCAController *globalCCAController = nullptr;
-
-
-void threaded_sender(std::future<void> futureObjSender)
+void threaded_sender(std::future<void> futureObjSender, hid_device *hidDevice)
 {
 
     while (futureObjSender.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout) {
 
         const byte cmdData[3] = {0x01, DUMMY, 0x00};
-        if(globalDeviceHandle) {
-            hid_write(globalDeviceHandle, cmdData, sizeof(cmdData));
+        if(hidDevice) {
+            hid_write(hidDevice, cmdData, sizeof(cmdData));
         }
     }
 }
 
-void threaded_poller(std::future<void> futureObj)
+void threaded_poller(std::future<void> futureObj, CCCAController *localCCAController, hid_device *hidDevice)
 {
     int nbRead;
 #ifdef LOCAL_DEBUG
@@ -40,13 +30,13 @@ void threaded_poller(std::future<void> futureObj)
 #endif
     
     while (futureObj.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
-        if(globalDeviceHandle) {
+        if(hidDevice) {
 #ifndef LOCAL_DEBUG
-            nbRead = hid_read(globalDeviceHandle, cHIDBuffer, sizeof(cHIDBuffer));
+            nbRead = hid_read(hidDevice, cHIDBuffer, sizeof(cHIDBuffer));
 #endif
             if(nbRead>0){
-                if(globalCCAController) {
-                    globalCCAController->parseResponse(cHIDBuffer, nbRead);
+                if(localCCAController) {
+                    localCCAController->parseResponse(cHIDBuffer, nbRead);
                 }
             }
         }
@@ -106,20 +96,6 @@ CCCAController::CCCAController()
 
 CCCAController::~CCCAController()
 {
-    if(m_ThreadsAreRunning) {
-        exitSignal.set_value();
-        exitSignalSender.set_value();
-#ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::Disconnect] Waiting for threads to exit\n", timestamp);
-        fflush(Logfile);
-#endif
-        th.join();
-        thSender.join();
-        m_ThreadsAreRunning = false;
-    }
 
     if(m_bIsConnected)
         Disconnect();
@@ -169,7 +145,6 @@ int CCCAController::Connect()
 
     // Set the hid_read() function to be non-blocking.
     hid_set_nonblocking(m_DevHandle, 1);
-    globalDeviceHandle = m_DevHandle;
     if(!m_ThreadsAreRunning) {
 #ifdef PLUGIN_DEBUG
         ltime = time(NULL);
@@ -178,9 +153,13 @@ int CCCAController::Connect()
         fprintf(Logfile, "[%s] [CCCAController::Connect] Starting HID threads\n", timestamp);
         fflush(Logfile);
 #endif
-        globalCCAController = this;
-        th = std::thread(&threaded_poller, std::move(futureObj));
-        thSender = std::thread(&threaded_sender, std::move(futureObjSender));
+        m_exitSignal = new std::promise<void>();
+        m_futureObj = m_exitSignal->get_future();
+        m_exitSignalSender = new std::promise<void>();
+        m_futureObjSender = m_exitSignalSender->get_future();
+        
+        m_th = std::thread(&threaded_poller, std::move(m_futureObj), this, m_DevHandle);
+        m_thSender = std::thread(&threaded_sender, std::move(m_futureObjSender), m_DevHandle);
         m_ThreadsAreRunning = true;
     }
     
@@ -198,7 +177,25 @@ void CCCAController::Disconnect()
         fprintf(Logfile, "[%s] [CCCAController::Disconnect] disconnecting from device\n", timestamp);
         fflush(Logfile);
 #endif
-    
+    if(m_ThreadsAreRunning) {
+#ifdef PLUGIN_DEBUG
+        ltime = time(NULL);
+        timestamp = asctime(localtime(&ltime));
+        timestamp[strlen(timestamp) - 1] = 0;
+        fprintf(Logfile, "[%s] [CCCAController::Disconnect] Waiting for threads to exit\n", timestamp);
+        fflush(Logfile);
+#endif
+        m_exitSignal->set_value();
+        m_exitSignalSender->set_value();
+        m_th.join();
+        m_thSender.join();
+        delete m_exitSignal;
+        delete m_exitSignalSender;
+        m_exitSignal = nullptr;
+        m_exitSignalSender = nullptr;
+        m_ThreadsAreRunning = false;
+    }
+
     if(m_bIsConnected)
             hid_close(m_DevHandle);
 
@@ -212,7 +209,6 @@ void CCCAController::Disconnect()
 
     hid_exit();
     m_DevHandle = nullptr;
-    globalDeviceHandle = nullptr;
 	m_bIsConnected = false;
 
 #ifdef PLUGIN_DEBUG

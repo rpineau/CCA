@@ -43,7 +43,7 @@
 
 #define PLUGIN_VERSION      1.0
 
-// #define PLUGIN_DEBUG 3
+#define PLUGIN_DEBUG 3
 
 #define DATA_BUFFER_SIZE    64
 #define MAX_TIMEOUT         1000
@@ -51,7 +51,7 @@
 #define REPORT_0_SIZE   8
 #define REPORT_1_SIZE   3
 
-// #define LOCAL_DEBUG
+#define LOCAL_DEBUG
 #ifndef LOCAL_DEBUG
 #define VENDOR_ID   0x20E1
 #define PRODUCT_ID  0x0002
@@ -150,7 +150,15 @@ protected:
     
     CStopWatch      m_cmdTimer;
     CStopWatch      m_gotoTimer;
-    bool            m_ThreadsAreRunning;
+
+    // threads
+    bool                m_ThreadsAreRunning;
+    std::promise<void> *m_exitSignal;
+    std::future<void>   m_futureObj; // = exitSignal.get_future();
+    std::promise<void> *m_exitSignalSender;
+    std::future<void>   m_futureObjSender; // = exitSignalSender.get_future();
+    std::thread         m_th;
+    std::thread         m_thSender;
 
 #ifdef PLUGIN_DEBUG
     void            hexdump(const byte *inputData, byte *outBuffer, int size);
