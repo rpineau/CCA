@@ -35,8 +35,8 @@ class BasicIniUtilInterface;
 class TickCountInterface;
 
 #define PARENT_KEY			"CCA"
-#define TEMP_SOURCE           "TempSource"
-
+#define TEMP_SOURCE         "TempSource"
+#define FAN_STATE           "FanState"
 
 #define LOG_BUFFER_SIZE 256
 #define TMP_BUF_SIZE    1024

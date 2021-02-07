@@ -51,12 +51,15 @@
 #define REPORT_0_SIZE   8
 #define REPORT_1_SIZE   3
 
+// #define LOCAL_DEBUG
+#ifndef LOCAL_DEBUG
 #define VENDOR_ID   0x20E1
 #define PRODUCT_ID  0x0002
-
+#else
 // just to test HID stuff with my only HID device that is not a keyboard or a mouse
-// #define VENDOR_ID 0x10cf
-// #define PRODUCT_ID 0x5500
+#define VENDOR_ID 0x10cf
+#define PRODUCT_ID 0x5500
+#endif
 
 enum CCA_Errors    {PLUGIN_OK = 0, NOT_CONNECTED, CCA_CANT_CONNECT, CCA_BAD_CMD_RESPONSE, COMMAND_FAILED};
 enum MotorDir       {NORMAL = 0 , REVERSE};
@@ -142,6 +145,8 @@ protected:
     float           m_fAirTemp;
     float           m_fTubeTemp;
     float           m_fMirorTemp;
+    
+    bool            m_bSetFanOn;
     
     CStopWatch      m_cmdTimer;
     CStopWatch      m_gotoTimer;

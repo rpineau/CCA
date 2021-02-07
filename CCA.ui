@@ -164,7 +164,7 @@
        </rect>
       </property>
       <property name="text">
-       <string>Fan :</string>
+       <string>Fans :</string>
       </property>
       <property name="alignment">
        <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>

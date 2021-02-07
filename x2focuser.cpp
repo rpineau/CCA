@@ -22,12 +22,13 @@ X2Focuser::X2Focuser(const char* pszDisplayName,
 	m_bLinked = false;
 	m_nPosition = 0;
 
+    m_CCAController.setSleeper(m_pSleeper);
+
     // Read in settings
     if (m_pIniUtil) {
-        int nTmp =  m_pIniUtil->readInt(PARENT_KEY, TEMP_SOURCE, AIR);
-        m_CCAController.setTemperatureSource(nTmp);
+        m_CCAController.setTemperatureSource(m_pIniUtil->readInt(PARENT_KEY, TEMP_SOURCE, AIR));
+        m_CCAController.setFanOn(m_pIniUtil->readInt(PARENT_KEY, FAN_STATE, 0) == 0? false : true);
     }
-    m_CCAController.setSleeper(m_pSleeper);
 }
 
 X2Focuser::~X2Focuser()
@@ -77,7 +78,7 @@ int	X2Focuser::queryAbstraction(const char* pszName, void** ppVal)
 #pragma mark - DriverInfoInterface
 void X2Focuser::driverInfoDetailedInfo(BasicStringInterface& str) const
 {
-        str = "Takahashi CCA Focuser X2 plugin by Rodolphe Pineau";
+        str = "Takahashi Active Focuser Focuser X2 plugin by Rodolphe Pineau";
 }
 
 double X2Focuser::driverInfoVersion(void) const							
@@ -87,7 +88,7 @@ double X2Focuser::driverInfoVersion(void) const
 
 void X2Focuser::deviceInfoNameShort(BasicStringInterface& str) const
 {
-    str="Takahashi CCA";
+    str="Takahashi Active Focuser";
 }
 
 void X2Focuser::deviceInfoNameLong(BasicStringInterface& str) const				
@@ -97,7 +98,7 @@ void X2Focuser::deviceInfoNameLong(BasicStringInterface& str) const
 
 void X2Focuser::deviceInfoDetailedDescription(BasicStringInterface& str) const		
 {
-	str = "Takahashi CCA Focuser";
+	str = "Takahashi Active Focuser";
 }
 
 void X2Focuser::deviceInfoFirmwareVersion(BasicStringInterface& str)				
@@ -116,7 +117,7 @@ void X2Focuser::deviceInfoFirmwareVersion(BasicStringInterface& str)
 
 void X2Focuser::deviceInfoModel(BasicStringInterface& str)							
 {
-    str="CCA";
+    str="Takahashi Active Focuser";
 }
 
 #pragma mark - LinkInterface
@@ -185,11 +186,6 @@ int	X2Focuser::execModalSettingsDialog(void)
     X2MutexLocker ml(GetMutex());
 	// set controls values
     if(m_bLinked) {
-        bTmp = m_CCAController.getFanState();
-        if(bTmp)
-            dx->setChecked("radioButton", 1);
-        else
-            dx->setChecked("radioButton", 1);
 
         dTemperature = m_CCAController.getTemperature(AIR);
         snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
@@ -204,12 +200,22 @@ int	X2Focuser::execModalSettingsDialog(void)
         dx->setText("mirrorTemp", szTmp);
     }
     else {
-        dx->setEnabled("radioButton",false);
         dx->setText("airTemp", "");
         dx->setText("tubeTemp", "");
         dx->setText("mirrorTemp", "");
     }
+
+    // if not connected, it will used the "saved" state, if connected the current state.
+    dx->setEnabled("radioButton",true);
+    dx->setEnabled("radioButton_2",true);
+    bTmp = m_CCAController.getFanState();
+    if(bTmp)
+        dx->setChecked("radioButton", 1);
+    else
+        dx->setChecked("radioButton_2", 1);
+
     // This doesn't require to be connected as this is the user selection of what temperature source he wants reported to TSX
+    dx->setEnabled("comboBox",true);
     nTmp = m_CCAController.getTemperatureSource();
     dx->setCurrentIndex("comboBox", nTmp);
 
@@ -224,6 +230,10 @@ int	X2Focuser::execModalSettingsDialog(void)
         nTmp = dx->currentIndex("comboBox");
         m_CCAController.setTemperatureSource(nTmp);
         m_pIniUtil->writeInt(PARENT_KEY, TEMP_SOURCE, nTmp);
+        if(dx->isChecked("radioButton"))
+            m_pIniUtil->writeInt(PARENT_KEY, FAN_STATE, 1);
+        else
+            m_pIniUtil->writeInt(PARENT_KEY, FAN_STATE, 0);
         nErr = SB_OK;
     }
     return nErr;

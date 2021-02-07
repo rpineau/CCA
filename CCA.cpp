@@ -31,12 +31,19 @@ void threaded_sender(std::future<void> futureObjSender)
 
 void threaded_poller(std::future<void> futureObj)
 {
-    byte cHIDBuffer[DATA_BUFFER_SIZE];
     int nbRead;
+#ifdef LOCAL_DEBUG
+    byte cHIDBuffer[DATA_BUFFER_SIZE] = {0x3C, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xA1, 0x04, 0x07, 0x00, 0x2A, 0x80, 0x80, 0x80, 0x1E, 0x0A, 0x01, 0x10, 0x03, 0xC1, 0x01, 0x80, 0x00, 0x34, 0x00, 0x02, 0xEF, 0x33, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x6C, 0x00, 0x00, 0x00, 0x70, 0x00, 0x00, 0x01, 0xF0, 0x08, 0x5C};
+    nbRead = 64;
+#else
+    byte cHIDBuffer[DATA_BUFFER_SIZE];
+#endif
     
     while (futureObj.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
         if(globalDeviceHandle) {
+#ifndef LOCAL_DEBUG
             nbRead = hid_read(globalDeviceHandle, cHIDBuffer, sizeof(cHIDBuffer));
+#endif
             if(nbRead>0){
                 if(globalCCAController) {
                     globalCCAController->parseResponse(cHIDBuffer, nbRead);
@@ -67,7 +74,8 @@ CCCAController::CCCAController()
 
     m_cmdTimer.Reset();
     
-
+    m_ThreadsAreRunning = false;
+    
 #ifdef PLUGIN_DEBUG
 #if defined(SB_WIN_BUILD)
     m_sLogfilePath = getenv("HOMEDRIVE");
@@ -98,6 +106,21 @@ CCCAController::CCCAController()
 
 CCCAController::~CCCAController()
 {
+    if(m_ThreadsAreRunning) {
+        exitSignal.set_value();
+        exitSignalSender.set_value();
+#ifdef PLUGIN_DEBUG
+        ltime = time(NULL);
+        timestamp = asctime(localtime(&ltime));
+        timestamp[strlen(timestamp) - 1] = 0;
+        fprintf(Logfile, "[%s] [CCCAController::Disconnect] Waiting for threads to exit\n", timestamp);
+        fflush(Logfile);
+#endif
+        th.join();
+        thSender.join();
+        m_ThreadsAreRunning = false;
+    }
+
     if(m_bIsConnected)
         Disconnect();
     
@@ -146,13 +169,23 @@ int CCCAController::Connect()
 
     // Set the hid_read() function to be non-blocking.
     hid_set_nonblocking(m_DevHandle, 1);
-    
     globalDeviceHandle = m_DevHandle;
-    globalCCAController = this;
-    th = std::thread(&threaded_poller, std::move(futureObj));
-    thSender = std::thread(&threaded_sender, std::move(futureObjSender));
-    m_ThreadsAreRunning = true;
+    if(!m_ThreadsAreRunning) {
+#ifdef PLUGIN_DEBUG
+        ltime = time(NULL);
+        timestamp = asctime(localtime(&ltime));
+        timestamp[strlen(timestamp) - 1] = 0;
+        fprintf(Logfile, "[%s] [CCCAController::Connect] Starting HID threads\n", timestamp);
+        fflush(Logfile);
+#endif
+        globalCCAController = this;
+        th = std::thread(&threaded_poller, std::move(futureObj));
+        thSender = std::thread(&threaded_sender, std::move(futureObjSender));
+        m_ThreadsAreRunning = true;
+    }
     
+    setFanOn(m_bSetFanOn);
+
     return nErr;
 }
 
@@ -165,21 +198,6 @@ void CCCAController::Disconnect()
         fprintf(Logfile, "[%s] [CCCAController::Disconnect] disconnecting from device\n", timestamp);
         fflush(Logfile);
 #endif
-
-    if(m_ThreadsAreRunning) {
-        exitSignal.set_value();
-        exitSignalSender.set_value();
-#ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::Disconnect] Waiting for threads to exit\n", timestamp);
-        fflush(Logfile);
-#endif
-        th.join();
-        thSender.join();
-        m_ThreadsAreRunning = false;
-    }
     
     if(m_bIsConnected)
             hid_close(m_DevHandle);
@@ -191,11 +209,12 @@ void CCCAController::Disconnect()
         fprintf(Logfile, "[%s] [CCCAController::Disconnect] calling hid_exit\n", timestamp);
         fflush(Logfile);
 #endif
-    hid_exit();
 
+    hid_exit();
     m_DevHandle = nullptr;
     globalDeviceHandle = nullptr;
 	m_bIsConnected = false;
+
 #ifdef PLUGIN_DEBUG
     ltime = time(NULL);
     timestamp = asctime(localtime(&ltime));
@@ -440,9 +459,12 @@ int CCCAController::setFanOn(bool bOn)
     int nByteWriten = 0;
     byte cHIDBuffer[DATA_BUFFER_SIZE + 1];
 
-    if(!m_bIsConnected)
-        return ERR_COMMNOLINK;
+    
+    m_bSetFanOn = bOn;
 
+    if(!m_bIsConnected) {
+        return ERR_COMMNOLINK;
+    }
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
 
@@ -474,7 +496,10 @@ int CCCAController::setFanOn(bool bOn)
 
 bool CCCAController::getFanState()
 {
-    return m_bFanIsOn;
+    if(!m_bIsConnected)
+        return m_bSetFanOn;
+    else
+        return m_bFanIsOn;
 }
 
 void CCCAController::setTemperatureSource(int nSource)
@@ -532,6 +557,8 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fTubeTemp           : %3.2f\n", timestamp, m_fTubeTemp);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fMirorTemp          : %3.2f\n", timestamp, m_fMirorTemp);
 #endif
+         if(m_bFanIsOn != m_bSetFanOn)
+             setFanOn(m_bSetFanOn);
     }
 }
 
