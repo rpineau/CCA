@@ -67,17 +67,24 @@ enum MotorStatus    {IDLE = 0, MOVING};
 enum TempSources    {AIR, TUBE, MIRROR};
 typedef unsigned char byte;
 
+
 typedef enum {
-    ZERO    = 0x03,
-    RELEASE = 0x04,
-    FREE    = 0x06,
-    AUTO    = 0x07,
-    MOVE    = 0x09,
-    STOP    = 0x0a,
-    FAN_ON  = 0x0b,
-    FAN_OFF = 0x0c,
-    RESET   = 0x7e,
-    DUMMY   = 0xff
+    Clockwise = 0x01,
+    CounterClockwise = 0x02,
+    Zero = 0x03,
+    Release = 0x04,
+    Function = 0x05,
+    Free = 0x06,
+    Auto = 0x07,
+    Manual = 0x08,
+    Move = 0x09,
+    Stop = 0x0A,
+    FanOn = 0x0B,
+    FanOff = 0x0C,
+    Settings2 = 0x7C,
+    Settings = 0x7D,
+    Reset = 0x7E,
+    Dummy = 0xFF
 } Commands;
 
 

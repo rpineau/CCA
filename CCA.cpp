@@ -7,19 +7,19 @@
 
 #include "CCA.h"
 
-void threaded_sender(std::future<void> futureObjSender, hid_device *hidDevice)
+void threaded_sender(std::future<void> futureObj, hid_device *hidDevice)
 {
 
-    while (futureObjSender.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout) {
-
-        const byte cmdData[3] = {0x01, DUMMY, 0x00};
+    while (futureObj.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout) {
+        
+        const byte cmdData[3] = {0x00, 0x01, Dummy};
         if(hidDevice) {
             hid_write(hidDevice, cmdData, sizeof(cmdData));
         }
     }
 }
 
-void threaded_poller(std::future<void> futureObj, CCCAController *localCCAController, hid_device *hidDevice)
+void threaded_poller(std::future<void> futureObj, CCCAController *CCAControllerObj, hid_device *hidDevice)
 {
     int nbRead;
 #ifdef LOCAL_DEBUG
@@ -35,8 +35,8 @@ void threaded_poller(std::future<void> futureObj, CCCAController *localCCAContro
             nbRead = hid_read(hidDevice, cHIDBuffer, sizeof(cHIDBuffer));
 #endif
             if(nbRead>0){
-                if(localCCAController) {
-                    localCCAController->parseResponse(cHIDBuffer, nbRead);
+                if(CCAControllerObj) {
+                    CCAControllerObj->parseResponse(cHIDBuffer, nbRead);
                 }
             }
         }
@@ -234,9 +234,9 @@ int CCCAController::haltFocuser()
         return ERR_COMMNOLINK;
 
     if(m_bIsMoving) {
-        cHIDBuffer[0] = 0x01; // report ID
-        cHIDBuffer[1] = STOP; // command
-        cHIDBuffer[2] = 0x00;
+        cHIDBuffer[0] = 0x00; // report ID
+        cHIDBuffer[1] = 0x01; // command length
+        cHIDBuffer[2] = Stop; // command
 
     #ifdef PLUGIN_DEBUG
         byte hexBuffer[DATA_BUFFER_SIZE * 4];
@@ -285,7 +285,7 @@ int CCCAController::gotoPosition(int nPos)
     #endif
         cHIDBuffer[0] = 0x00; // report ID
         cHIDBuffer[1] = 0x05; // size is 5 bytes
-        cHIDBuffer[2] = MOVE; // command = move
+        cHIDBuffer[2] = Move; // command = move
         cHIDBuffer[3] = (nPos &0xFF00000) >> 24 ;
         cHIDBuffer[4] = (nPos &0x00FF000) >> 16;
         cHIDBuffer[5] = (nPos &0x0000FF00) >> 8;
@@ -464,13 +464,14 @@ int CCCAController::setFanOn(bool bOn)
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
 
-    cHIDBuffer[0] = 0x01; // report ID
+    cHIDBuffer[0] = 0x00; // report ID
+    cHIDBuffer[1] = 0x01; // command length
     if(bOn)
-        cHIDBuffer[1] = FAN_ON; // command
+        cHIDBuffer[2] = FanOn; // command
     else
-        cHIDBuffer[1] = FAN_OFF; // command
+        cHIDBuffer[2] = FanOff; // command
 
-    cHIDBuffer[2] = 0x00;
+   
 
 #ifdef PLUGIN_DEBUG
     byte hexBuffer[DATA_BUFFER_SIZE * 4];
@@ -547,8 +548,8 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bFanIsOn            : %s\n", timestamp, m_bFanIsOn?"Yes":"No");
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bIsHold             : %s\n", timestamp, m_bIsHold?"Yes":"No");
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_sVersion            : %s\n", timestamp, m_sVersion.c_str());
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nCurPos             : %d\n", timestamp, m_nCurPos);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_dMillimetersPerStep : %f\n", timestamp, m_dMillimetersPerStep);
+         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nMaxPos             : %d\n", timestamp, m_nMaxPos);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fAirTemp            : %3.2f\n", timestamp, m_fAirTemp);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fTubeTemp           : %3.2f\n", timestamp, m_fTubeTemp);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fMirorTemp          : %3.2f\n", timestamp, m_fMirorTemp);
