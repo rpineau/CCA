@@ -270,12 +270,7 @@ int CCCAController::gotoPosition(int nPos)
     if (nPos>m_nMaxPos)
         return ERR_LIMITSEXCEEDED;
 
-#ifdef SB_WIN_BUILD
-    if(!m_bIsMoving) {
-#else
     if(m_bIsHold && !m_bIsMoving) {
-#endif
-        
     #ifdef PLUGIN_DEBUG
         ltime = time(NULL);
         timestamp = asctime(localtime(&ltime));
@@ -526,37 +521,95 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         fflush(Logfile);
 #endif
 
-     if(Buffer[0] == 0x3C) {
+    if(Buffer[0] == 0x3C) {
         m_nCurPos               = Get32(Buffer, 2);
+        m_bIsWired              = (Buffer[6] == 0);
         m_bIsAtOrigin           = (Buffer[7] & 128) != 0;
         m_bIsMoving             = (Buffer[7] &  64) != 0;
         m_bFanIsOn              = (Buffer[7] &  32) != 0;
         m_bIsHold               = (Buffer[7] &   3) != 0;
+        m_nDriveMode            = Buffer[8];
+        m_nStepSize             = Buffer[9];
+        m_nBitsFlag             = Buffer[11];
+        m_nAirTempOffset        = Buffer[12];
+        m_nTubeTempOffset       = Buffer[13];
+        m_nMirorTempOffset      = Buffer[14];
+        m_nDeltaT               = Buffer[15];
+        m_nStillTime            = Buffer[16];
         m_sVersion              = std::to_string(Get16(Buffer, 17)>>8) + "." + std::to_string(Get16(Buffer, 17) & 0xFF);
+        m_nBackstep             = Get16(Buffer, 19);
+        m_nBacklash             = Get16(Buffer, 21);
         m_dMillimetersPerStep   = Get16(Buffer,23) / 1000000.0;
         m_nMaxPos               = Get32(Buffer, 25);
+        m_nPreset0              = Get32(Buffer, 29);
+        m_nPreset1              = Get32(Buffer, 33);
+        m_nPreset2              = Get32(Buffer, 37);
+        m_nPreset3              = Get32(Buffer, 41);
         m_fAirTemp              = Get32(Buffer, 45) / 10.0;
         m_fTubeTemp             = Get32(Buffer, 49) / 10.0;
         m_fMirorTemp            = Get32(Buffer, 53) / 10.0;
+        m_nBacklashSteps        = Get32(Buffer, 57);
+         
 #ifdef PLUGIN_DEBUG
         ltime = time(NULL);
         timestamp = asctime(localtime(&ltime));
         timestamp[strlen(timestamp) - 1] = 0;
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nCurPos             : %d\n", timestamp, m_nCurPos);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bIsWired            : %s\n", timestamp, m_bIsWired?"Yes":"No");
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bIsAtOrigin         : %s\n", timestamp, m_bIsAtOrigin?"Yes":"No");
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bIsMoving           : %s\n", timestamp, m_bIsMoving?"Yes":"No");
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bFanIsOn            : %s\n", timestamp, m_bFanIsOn?"Yes":"No");
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bIsHold             : %s\n", timestamp, m_bIsHold?"Yes":"No");
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nDriveMode          : %d\n", timestamp, m_nDriveMode);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nStepSize           : %d\n", timestamp, m_nStepSize);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nBitsFlag           : %d\n", timestamp, m_nBitsFlag);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nAirTempOffset      : %d\n", timestamp, m_nAirTempOffset);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nTubeTempOffset     : %d\n", timestamp, m_nTubeTempOffset);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nMirorTempOffset    : %d\n", timestamp, m_nMirorTempOffset);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nDeltaT             : %d\n", timestamp, m_nDeltaT);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nStillTime          : %d\n", timestamp, m_nStillTime);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_sVersion            : %s\n", timestamp, m_sVersion.c_str());
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nBackstep           : %d\n", timestamp, m_nBackstep);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nBacklash           : %d\n", timestamp, m_nBacklash);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_dMillimetersPerStep : %f\n", timestamp, m_dMillimetersPerStep);
-         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nMaxPos             : %d\n", timestamp, m_nMaxPos);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nMaxPos             : %d\n", timestamp, m_nMaxPos);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nPreset0            : %d\n", timestamp, m_nPreset0);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nPreset1            : %d\n", timestamp, m_nPreset1);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nPreset2            : %d\n", timestamp, m_nPreset2);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nPreset3            : %d\n", timestamp, m_nPreset3);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fAirTemp            : %3.2f\n", timestamp, m_fAirTemp);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fTubeTemp           : %3.2f\n", timestamp, m_fTubeTemp);
         fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fMirorTemp          : %3.2f\n", timestamp, m_fMirorTemp);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nBacklashSteps      : %d\n", timestamp, m_nBacklashSteps);
+        fflush(Logfile);
 #endif
          if(m_bFanIsOn != m_bSetFanOn)
              setFanOn(m_bSetFanOn);
     }
+    if(Buffer[0] == 0x11) {
+        m_nMaxPps           = Get16(Buffer, 2);
+        m_nMinPps           = Get16(Buffer, 4);
+        m_nGetbackRate      = Buffer[7];
+        m_nBatteryMaxRate   = Buffer[8];
+        m_nPowerTimer       = Get16(Buffer, 10);
+        m_nFanTimer         = Get16(Buffer, 12);
+        m_nOriginOffset     = Get16(Buffer, 14);
+#ifdef PLUGIN_DEBUG
+        ltime = time(NULL);
+        timestamp = asctime(localtime(&ltime));
+        timestamp[strlen(timestamp) - 1] = 0;
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nMaxPps             : %d\n", timestamp, m_nMaxPps);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nMinPps             : %d\n", timestamp, m_nMinPps);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nGetbackRate        : %d\n", timestamp, m_nGetbackRate);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nBatteryMaxRate     : %d\n", timestamp, m_nBatteryMaxRate);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nPowerTimer         : %d\n", timestamp, m_nPowerTimer);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nTubeTempOffset     : %d\n", timestamp, m_nTubeTempOffset);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nMirorTempOffset    : %d\n", timestamp, m_nMirorTempOffset);
+        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nOriginOffset       : %d\n", timestamp, m_nOriginOffset);
+        fflush(Logfile);
+#endif
+    }
+
 }
 
 int CCCAController::Get32(const byte *buffer, int position)

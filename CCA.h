@@ -141,18 +141,45 @@ protected:
     bool            m_bPosLimitEnabled;
 
     int             m_nTempSource;
+    // Takahashi focuser data for 0x3C
     int             m_nCurPos;
+    bool            m_bIsWired;
     bool            m_bIsAtOrigin;
     bool            m_bIsMoving;
     bool            m_bFanIsOn;
+    bool            m_bIsBatteryOperated;
     bool            m_bIsHold;
+    byte            m_nDriveMode;
+    byte            m_nStepSize;
+    byte            m_nBitsFlag;    // Settings.BitFlags = (byte)(SystemState.BitFlags & -16 | (BlackoutLedCheckbox.Checked ? 2 : 0) | (AutoFanControlCheckbox.Checked ? 4 : 0) | (AutoSynchronizeCheckbox.Checked ? 8 : 0));
+    int             m_nAirTempOffset;
+    int             m_nTubeTempOffset;
+    int             m_nMirorTempOffset;
+    byte            m_nDeltaT;
+    byte            m_nStillTime;
     std::string     m_sVersion;
+    byte            m_nBackstep;
+    byte            m_nBacklash;
     double          m_dMillimetersPerStep;
     int             m_nMaxPos;
+    int             m_nPreset0;
+    int             m_nPreset1;
+    int             m_nPreset2;
+    int             m_nPreset3;
     float           m_fAirTemp;
     float           m_fTubeTemp;
     float           m_fMirorTemp;
+    int             m_nBacklashSteps;
     
+    // Takahashi focuser data for 0x11
+    int             m_nMaxPps;
+    int             m_nMinPps;
+    byte            m_nGetbackRate;
+    byte            m_nBatteryMaxRate;
+    int             m_nPowerTimer;
+    int             m_nFanTimer;
+    int             m_nOriginOffset;
+
     bool            m_bSetFanOn;
     
     CStopWatch      m_cmdTimer;
