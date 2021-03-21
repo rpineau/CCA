@@ -40,6 +40,10 @@ DirExistsWarning=no
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[Dirs]
+Name: "{app}\Plugins\FocuserPlugins";
+Name: "{app}\Plugins64\FocuserPlugins";
+
 [Files]
 ; WIll also need to customise these!
 Source: "focuserlist CCA.txt";                      DestDir: "{app}\Miscellaneous Files"; Flags: ignoreversion
