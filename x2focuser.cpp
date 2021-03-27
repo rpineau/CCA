@@ -28,6 +28,7 @@ X2Focuser::X2Focuser(const char* pszDisplayName,
     if (m_pIniUtil) {
         m_CCAController.setTemperatureSource(m_pIniUtil->readInt(PARENT_KEY, TEMP_SOURCE, AIR));
         m_CCAController.setFanOn(m_pIniUtil->readInt(PARENT_KEY, FAN_STATE, 0) == 0? false : true);
+        m_CCAController.setRestorePosition(m_pIniUtil->readInt(PARENT_KEY, LAST_POSITION, 0), m_pIniUtil->readInt(PARENT_KEY, RESTORE_POSITION, 0) == 0? false : true);
     }
 }
 
@@ -143,6 +144,7 @@ int	X2Focuser::terminateLink(void)
         return SB_OK;
 
     X2MutexLocker ml(GetMutex());
+    m_pIniUtil->writeInt(PARENT_KEY, LAST_POSITION, m_CCAController.getPosition());
     m_CCAController.Disconnect();
     m_bLinked = false;
 
@@ -234,6 +236,13 @@ int	X2Focuser::execModalSettingsDialog(void)
             m_pIniUtil->writeInt(PARENT_KEY, FAN_STATE, 1);
         else
             m_pIniUtil->writeInt(PARENT_KEY, FAN_STATE, 0);
+
+        if(dx->isChecked("checkBox"))
+            m_pIniUtil->writeInt(PARENT_KEY, RESTORE_POSITION, 1);
+        else
+            m_pIniUtil->writeInt(PARENT_KEY, RESTORE_POSITION, 0);
+
+        m_pIniUtil->writeInt(PARENT_KEY, LAST_POSITION, m_CCAController.getPosition());
         nErr = SB_OK;
     }
     return nErr;

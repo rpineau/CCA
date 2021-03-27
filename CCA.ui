@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>326</width>
-    <height>262</height>
+    <height>312</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -19,13 +19,13 @@
   <property name="minimumSize">
    <size>
     <width>326</width>
-    <height>262</height>
+    <height>312</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
     <width>326</width>
-    <height>262</height>
+    <height>312</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -62,7 +62,7 @@
       <property name="geometry">
        <rect>
         <x>120</x>
-        <y>192</y>
+        <y>240</y>
         <width>81</width>
         <height>24</height>
        </rect>
@@ -78,7 +78,7 @@
       <property name="geometry">
        <rect>
         <x>208</x>
-        <y>192</y>
+        <y>240</y>
         <width>81</width>
         <height>24</height>
        </rect>
@@ -255,6 +255,19 @@
       </property>
       <property name="text">
        <string>22.5 ºC</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="checkBox">
+      <property name="geometry">
+       <rect>
+        <x>32</x>
+        <y>192</y>
+        <width>200</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Restore position on connect</string>
       </property>
      </widget>
     </widget>

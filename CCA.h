@@ -121,6 +121,8 @@ public:
     void        setTemperatureSource(int nSource);
     int         getTemperatureSource();
 
+    void        setRestorePosition(int nPosition, bool bRestoreOnConnect);
+    
     void        parseResponse(byte *Buffer, int nLength);
 
 protected:
@@ -181,6 +183,9 @@ protected:
     int             m_nOriginOffset;
 
     bool            m_bSetFanOn;
+    
+    bool            m_bRestorePosition;
+    int             m_nSavedPosistion;
     
     CStopWatch      m_cmdTimer;
     CStopWatch      m_gotoTimer;

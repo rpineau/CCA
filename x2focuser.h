@@ -37,6 +37,8 @@ class TickCountInterface;
 #define PARENT_KEY			"CCA"
 #define TEMP_SOURCE         "TempSource"
 #define FAN_STATE           "FanState"
+#define LAST_POSITION       "LastPosition"
+#define RESTORE_POSITION    "RestorePosition"
 
 #define LOG_BUFFER_SIZE 256
 #define TMP_BUF_SIZE    1024

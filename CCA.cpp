@@ -165,6 +165,10 @@ int CCCAController::Connect()
     
     setFanOn(m_bSetFanOn);
 
+    if(m_bRestorePosition) {
+        gotoPosition(m_nSavedPosistion);
+    }
+    
     return nErr;
 }
 
@@ -505,6 +509,22 @@ int CCCAController::getTemperatureSource()
 
 }
 
+void CCCAController::setRestorePosition(int nPosition, bool bRestoreOnConnect)
+{
+    m_bRestorePosition = bRestoreOnConnect;
+    m_nSavedPosistion = nPosition;
+    
+#ifdef PLUGIN_DEBUG
+    ltime = time(NULL);
+    timestamp = asctime(localtime(&ltime));
+    timestamp[strlen(timestamp) - 1] = 0;
+    fprintf(Logfile, "[%s] [CCCAController::setRestorePosition] m_bRestorePosition = %s\n", timestamp, m_bRestorePosition?"Yes":"No");
+    fprintf(Logfile, "[%s] [CCCAController::setRestorePosition] m_nSavedPosistion = %d\n", timestamp, m_nSavedPosistion);
+    fflush(Logfile);
+#endif
+
+}
+
 #pragma mark command and response functions
 
 
@@ -521,7 +541,7 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         fflush(Logfile);
 #endif
 
-    if(Buffer[0] == 0x3C) {
+    if((Buffer[0] == 0x3C) && (nLength >=64)) {
         m_nCurPos               = Get32(Buffer, 2);
         m_bIsWired              = (Buffer[6] == 0);
         m_bIsAtOrigin           = (Buffer[7] & 128) != 0;
@@ -586,7 +606,7 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
          if(m_bFanIsOn != m_bSetFanOn)
              setFanOn(m_bSetFanOn);
     }
-    if(Buffer[0] == 0x11) {
+    if((Buffer[0] == 0x11) && (nLength>= 16)) {
         m_nMaxPps           = Get16(Buffer, 2);
         m_nMinPps           = Get16(Buffer, 4);
         m_nGetbackRate      = Buffer[7];
