@@ -7,14 +7,20 @@
 
 #include "CCA.h"
 
-void threaded_sender(std::future<void> futureObj, hid_device *hidDevice)
+void threaded_sender(std::future<void> futureObj, CCCAController *CCAControllerObj, hid_device *hidDevice)
 {
+    const byte cmdData[3] = {0x00, 0x01, Dummy};
 
     while (futureObj.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout) {
-        
-        const byte cmdData[3] = {0x00, 0x01, Dummy};
         if(hidDevice) {
-            hid_write(hidDevice, cmdData, sizeof(cmdData));
+            if(CCAControllerObj->m_DevAccessMutex.try_lock()) {
+                hid_write(hidDevice, cmdData, sizeof(cmdData));
+                CCAControllerObj->m_DevAccessMutex.unlock();
+            }
+            else {
+                std::this_thread::yield();
+                continue;
+            }
         }
     }
 }
@@ -28,11 +34,18 @@ void threaded_poller(std::future<void> futureObj, CCCAController *CCAControllerO
 #else
     byte cHIDBuffer[DATA_BUFFER_SIZE];
 #endif
-    
+
     while (futureObj.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
         if(hidDevice) {
 #ifndef LOCAL_DEBUG
-            nbRead = hid_read(hidDevice, cHIDBuffer, sizeof(cHIDBuffer));
+            if(CCAControllerObj->m_DevAccessMutex.try_lock()) {
+                nbRead = hid_read(hidDevice, cHIDBuffer, sizeof(cHIDBuffer));
+                CCAControllerObj->m_DevAccessMutex.unlock();
+            }
+            else {
+                std::this_thread::yield();
+                continue;
+            }
 #endif
             if(nbRead>0){
                 if(CCAControllerObj) {
@@ -159,7 +172,7 @@ int CCCAController::Connect()
         m_futureObjSender = m_exitSignalSender->get_future();
         
         m_th = std::thread(&threaded_poller, std::move(m_futureObj), this, m_DevHandle);
-        m_thSender = std::thread(&threaded_sender, std::move(m_futureObjSender), m_DevHandle);
+        m_thSender = std::thread(&threaded_sender, std::move(m_futureObjSender), this,  m_DevHandle);
         m_ThreadsAreRunning = true;
     }
     
@@ -251,10 +264,15 @@ int CCCAController::haltFocuser()
         fprintf(Logfile, "[%s] [CCCAController::haltFocuser] sending : %s\n", timestamp, hexBuffer);
         fflush(Logfile);
     #endif
-
-        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
-        if(nByteWriten<0)
+        if(m_DevAccessMutex.try_lock()) {
+            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
+            m_DevAccessMutex.unlock();
+            if(nByteWriten<0)
+                nErr = ERR_CMDFAILED;
+        }
+        else {
             nErr = ERR_CMDFAILED;
+        }
     }
     return nErr;
 }
@@ -301,10 +319,15 @@ int CCCAController::gotoPosition(int nPos)
         fflush(Logfile);
     #endif
 
-        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_0_SIZE);
-        if(nByteWriten<0)
+        if(m_DevAccessMutex.try_lock()) {
+            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_0_SIZE);
+            m_DevAccessMutex.unlock();
+            if(nByteWriten<0)
+                nErr = ERR_CMDFAILED;
+        }
+        else {
             nErr = ERR_CMDFAILED;
-
+        }
     #ifdef PLUGIN_DEBUG
         ltime = time(NULL);
         timestamp = asctime(localtime(&ltime));
@@ -387,9 +410,14 @@ int CCCAController::getFirmwareVersion(char *pszVersion, int nStrMaxLen)
 
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
-
-    if(m_sVersion.size()) {
-        strncpy(pszVersion, m_sVersion.c_str(), nStrMaxLen);
+    if(m_GlobalMutex.try_lock()) {
+        if(m_sVersion.size()) {
+            strncpy(pszVersion, m_sVersion.c_str(), nStrMaxLen);
+        }
+        else {
+            strncpy(pszVersion, "NA", nStrMaxLen);
+        }
+        m_GlobalMutex.unlock();
     }
     else
         strncpy(pszVersion, "NA", nStrMaxLen);
@@ -481,12 +509,15 @@ int CCCAController::setFanOn(bool bOn)
     fprintf(Logfile, "[%s] [CCCAController::setFanOn] sending : %s\n", timestamp, hexBuffer);
     fflush(Logfile);
 #endif
-
-    nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
-    if(nByteWriten<0) {
-        nErr = ERR_CMDFAILED;
+    if(m_DevAccessMutex.try_lock()) {
+        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
+        m_DevAccessMutex.unlock();
+        if(nByteWriten<0) {
+            nErr = ERR_CMDFAILED;
+        }
     }
-    
+    else
+        nErr = ERR_CMDFAILED;
     return nErr;
 }
 
@@ -530,6 +561,9 @@ void CCCAController::setRestorePosition(int nPosition, bool bRestoreOnConnect)
 
 void CCCAController::parseResponse(byte *Buffer, int nLength)
 {
+
+    // locking the mutex to prevent access while we're accessing to the data.
+    const std::lock_guard<std::mutex> lock(m_GlobalMutex);
 
 #ifdef PLUGIN_DEBUG
         byte hexBuffer[DATA_BUFFER_SIZE * 4];
@@ -649,6 +683,7 @@ int CCCAController::Get16(const byte *buffer, int position)
     return buffer[position] << 8 | buffer[position + 1];
 
 }
+
 #ifdef PLUGIN_DEBUG
 void  CCCAController::hexdump(const byte* inputData, byte *outBuffer, int size)
 {

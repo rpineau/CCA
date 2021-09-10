@@ -29,9 +29,10 @@
 #include <exception>
 #include <typeinfo>
 #include <stdexcept>
-
 #include <future>
 #include <chrono>
+#include <mutex>
+#include <thread>
 
 #include "../../licensedinterfaces/sberrorx.h"
 #include "../../licensedinterfaces/serxinterface.h"
@@ -125,11 +126,14 @@ public:
     
     void        parseResponse(byte *Buffer, int nLength);
 
+    std::mutex          m_GlobalMutex;
+    std::mutex          m_DevAccessMutex;
+
 protected:
 
     int             Get32(const byte *buffer, int position);
     int             Get16(const byte *buffer, int position);
-    
+
     SleeperInterface    *m_pSleeper;
 
     hid_device      *m_DevHandle;
@@ -143,49 +147,48 @@ protected:
     bool            m_bPosLimitEnabled;
 
     int             m_nTempSource;
+
     // Takahashi focuser data for 0x3C
-    int             m_nCurPos;
-    bool            m_bIsWired;
-    bool            m_bIsAtOrigin;
-    bool            m_bIsMoving;
-    bool            m_bFanIsOn;
-    bool            m_bIsBatteryOperated;
-    bool            m_bIsHold;
-    byte            m_nDriveMode;
-    byte            m_nStepSize;
-    byte            m_nBitsFlag;    // Settings.BitFlags = (byte)(SystemState.BitFlags & -16 | (BlackoutLedCheckbox.Checked ? 2 : 0) | (AutoFanControlCheckbox.Checked ? 4 : 0) | (AutoSynchronizeCheckbox.Checked ? 8 : 0));
-    int             m_nAirTempOffset;
-    int             m_nTubeTempOffset;
-    int             m_nMirorTempOffset;
-    byte            m_nDeltaT;
-    byte            m_nStillTime;
-    std::string     m_sVersion;
-    byte            m_nBackstep;
-    byte            m_nBacklash;
-    double          m_dMillimetersPerStep;
-    int             m_nMaxPos;
-    int             m_nPreset0;
-    int             m_nPreset1;
-    int             m_nPreset2;
-    int             m_nPreset3;
-    float           m_fAirTemp;
-    float           m_fTubeTemp;
-    float           m_fMirorTemp;
-    int             m_nBacklashSteps;
+    std::atomic<int>            m_nCurPos;
+    std::atomic<bool>           m_bIsWired;
+    std::atomic<bool>           m_bIsAtOrigin;
+    std::atomic<bool>           m_bIsMoving;
+    std::atomic<bool>           m_bFanIsOn;
+    std::atomic<bool>           m_bIsBatteryOperated;
+    std::atomic<bool>           m_bIsHold;
+    std::atomic<byte>           m_nDriveMode;
+    std::atomic<byte>           m_nStepSize;
+    std::atomic<byte>           m_nBitsFlag;    // Settings.BitFlags = (byte)(SystemState.BitFlags & -16 | (BlackoutLedCheckbox.Checked ? 2 : 0) | (AutoFanControlCheckbox.Checked ? 4 : 0) | (AutoSynchronizeCheckbox.Checked ? 8 : 0));
+    std::atomic<int>            m_nAirTempOffset;
+    std::atomic<int>            m_nTubeTempOffset;
+    std::atomic<int>            m_nMirorTempOffset;
+    std::atomic<byte>           m_nDeltaT;
+    std::atomic<byte>           m_nStillTime;
+    std::string                 m_sVersion;
+    std::atomic<byte>           m_nBackstep;
+    std::atomic<byte>           m_nBacklash;
+    std::atomic<double>         m_dMillimetersPerStep;
+    std::atomic<int>            m_nMaxPos;
+    std::atomic<int>            m_nPreset0;
+    std::atomic<int>            m_nPreset1;
+    std::atomic<int>            m_nPreset2;
+    std::atomic<int>            m_nPreset3;
+    std::atomic<float>          m_fAirTemp;
+    std::atomic<float>          m_fTubeTemp;
+    std::atomic<float>          m_fMirorTemp;
+    std::atomic<int>            m_nBacklashSteps;
     
     // Takahashi focuser data for 0x11
-    int             m_nMaxPps;
-    int             m_nMinPps;
-    byte            m_nGetbackRate;
-    byte            m_nBatteryMaxRate;
-    int             m_nPowerTimer;
-    int             m_nFanTimer;
-    int             m_nOriginOffset;
-
-    bool            m_bSetFanOn;
-    
-    bool            m_bRestorePosition;
-    int             m_nSavedPosistion;
+    std::atomic<int>            m_nMaxPps;
+    std::atomic<int>            m_nMinPps;
+    std::atomic<byte>           m_nGetbackRate;
+    std::atomic<byte>           m_nBatteryMaxRate;
+    std::atomic<int>            m_nPowerTimer;
+    std::atomic<int>            m_nFanTimer;
+    std::atomic<int>            m_nOriginOffset;
+    std::atomic<bool>           m_bSetFanOn;
+    std::atomic<bool>           m_bRestorePosition;
+    std::atomic<int>            m_nSavedPosistion;
     
     CStopWatch      m_cmdTimer;
     CStopWatch      m_gotoTimer;
@@ -198,6 +201,7 @@ protected:
     std::future<void>   m_futureObjSender; // = exitSignalSender.get_future();
     std::thread         m_th;
     std::thread         m_thSender;
+
 
 #ifdef PLUGIN_DEBUG
     void            hexdump(const byte *inputData, byte *outBuffer, int size);
