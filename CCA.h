@@ -8,12 +8,6 @@
 
 #ifndef __CCA__
 #define __CCA__
-#include <string.h>
-#include <math.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <ctype.h>
-#include <memory.h>
 
 #ifdef SB_MAC_BUILD
 #include <unistd.h>
@@ -25,18 +19,14 @@
 #include <string>
 #include <vector>
 #include <sstream>
-#include <iostream>
-#include <exception>
-#include <typeinfo>
-#include <stdexcept>
 #include <future>
 #include <chrono>
 #include <mutex>
 #include <thread>
+#include <iomanip>
+#include <fstream>
 
 #include "../../licensedinterfaces/sberrorx.h"
-#include "../../licensedinterfaces/serxinterface.h"
-#include "../../licensedinterfaces/loggerinterface.h"
 #include "../../licensedinterfaces/sleeperinterface.h"
 
 #include "hidapi.h"
@@ -44,7 +34,7 @@
 
 #define PLUGIN_VERSION      1.0
 
-// #define PLUGIN_DEBUG 3
+#define PLUGIN_DEBUG 3
 
 #define DATA_BUFFER_SIZE    64
 #define MAX_TIMEOUT         1000
@@ -204,13 +194,13 @@ protected:
 
 
 #ifdef PLUGIN_DEBUG
-    void            hexdump(const byte *inputData, byte *outBuffer, int size);
+    void    hexdump(const byte *inputData, int inputSize,  std::string &outHex);
+    // timestamp for logs
+    const std::string getTimeStamp();
+    std::string hexOut;
+    std::ofstream m_sLogFile;
     std::string m_sPlatform;
     std::string m_sLogfilePath;
-    // timestamp for logs
-    char *timestamp;
-    time_t ltime;
-    FILE *Logfile;      // LogFile
 #endif
 
 

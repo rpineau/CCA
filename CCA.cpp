@@ -13,7 +13,7 @@ void threaded_sender(std::future<void> futureObj, CCCAController *CCAControllerO
 
     while (futureObj.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout) {
         if(hidDevice) {
-            if(CCAControllerObj->m_DevAccessMutex.try_lock()) {
+            if(CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
                 hid_write(hidDevice, cmdData, sizeof(cmdData));
                 CCAControllerObj->m_DevAccessMutex.unlock();
             }
@@ -38,7 +38,7 @@ void threaded_poller(std::future<void> futureObj, CCCAController *CCAControllerO
     while (futureObj.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
         if(hidDevice) {
 #ifndef LOCAL_DEBUG
-            if(CCAControllerObj->m_DevAccessMutex.try_lock()) {
+            if(CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
                 nbRead = hid_read(hidDevice, cHIDBuffer, sizeof(cHIDBuffer));
                 CCAControllerObj->m_DevAccessMutex.unlock();
             }
@@ -94,16 +94,13 @@ CCCAController::CCCAController()
     m_sLogfilePath += "/CCA-Log.txt";
     m_sPlatform = "macOS";
 #endif
-    Logfile = fopen(m_sLogfilePath.c_str(), "w");
+    m_sLogFile.open(m_sLogfilePath, std::ios::out |std::ios::trunc);
 #endif
 
 #if defined PLUGIN_DEBUG && PLUGIN_DEBUG >= 2
-    ltime = time(NULL);
-    timestamp = asctime(localtime(&ltime));
-    timestamp[strlen(timestamp) - 1] = 0;
-    fprintf(Logfile, "[%s] [CCCAController::CCCAController] Version %3.2f build 2021_02_05_1705 on %s.\n", timestamp, PLUGIN_VERSION, m_sPlatform.c_str());
-    fprintf(Logfile, "[%s] [CCCAController::CCCAController] Constructor Called.\n", timestamp);
-    fflush(Logfile);
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [CCCAController] Version " << std::fixed << std::setprecision(2) << PLUGIN_VERSION << " build " << __DATE__ << " " << __TIME__ << " on "<< m_sPlatform << std::endl;
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [CCCAController] Constructor Called." << std::endl;
+    m_sLogFile.flush();
 #endif
 }
 
@@ -115,8 +112,8 @@ CCCAController::~CCCAController()
     
 #ifdef	PLUGIN_DEBUG
     // Close LogFile
-    if (Logfile)
-        fclose(Logfile);
+    if(m_sLogFile.is_open())
+        m_sLogFile.close();
 #endif
     
 }
@@ -126,11 +123,8 @@ int CCCAController::Connect()
     int nErr = PLUGIN_OK;
 
 #ifdef PLUGIN_DEBUG
-	ltime = time(NULL);
-	timestamp = asctime(localtime(&ltime));
-	timestamp[strlen(timestamp) - 1] = 0;
-	fprintf(Logfile, "[%s] [CCCAController::Connect] Called\n", timestamp);
-	fflush(Logfile);
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Connect] Called." << std::endl;
+    m_sLogFile.flush();
 #endif
 
     // vendor id is : 0x20E1 and the product id is : 0x0002.
@@ -138,33 +132,24 @@ int CCCAController::Connect()
     if (!m_DevHandle) {
         m_bIsConnected = false;
 #ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::Connect] hid_open failed for vendor id 0x%04X product id 0x%04X\n", timestamp, VENDOR_ID, PRODUCT_ID);
-        fflush(Logfile);
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Connect] hid_open failed for vendor id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex <<  VENDOR_ID << " product id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << PRODUCT_ID << std::endl;
+        m_sLogFile.flush();
 #endif
         return CCA_CANT_CONNECT;
     }
     m_bIsConnected = true;
 
 #ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::Connect] Connected to vendor id 0x%04X product id 0x%04X\n", timestamp, VENDOR_ID, PRODUCT_ID);
-        fflush(Logfile);
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Connect] Connected to vendor id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex <<  VENDOR_ID << " product id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << PRODUCT_ID << std::endl;
+    m_sLogFile.flush();
 #endif
 
     // Set the hid_read() function to be non-blocking.
     hid_set_nonblocking(m_DevHandle, 1);
     if(!m_ThreadsAreRunning) {
 #ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::Connect] Starting HID threads\n", timestamp);
-        fflush(Logfile);
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Connect] Starting HID threads." << std::endl;
+        m_sLogFile.flush();
 #endif
         m_exitSignal = new std::promise<void>();
         m_futureObj = m_exitSignal->get_future();
@@ -188,19 +173,13 @@ int CCCAController::Connect()
 void CCCAController::Disconnect()
 {
 #ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::Disconnect] disconnecting from device\n", timestamp);
-        fflush(Logfile);
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Disconnect] Disconnecting from device." << std::endl;
+    m_sLogFile.flush();
 #endif
     if(m_ThreadsAreRunning) {
 #ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::Disconnect] Waiting for threads to exit\n", timestamp);
-        fflush(Logfile);
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Disconnect] Waiting for threads to exit." << std::endl;
+        m_sLogFile.flush();
 #endif
         m_exitSignal->set_value();
         m_exitSignalSender->set_value();
@@ -217,11 +196,8 @@ void CCCAController::Disconnect()
             hid_close(m_DevHandle);
 
 #ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::Disconnect] calling hid_exit\n", timestamp);
-        fflush(Logfile);
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Disconnect] Calling hid_exit." << std::endl;
+    m_sLogFile.flush();
 #endif
 
     hid_exit();
@@ -229,11 +205,8 @@ void CCCAController::Disconnect()
 	m_bIsConnected = false;
 
 #ifdef PLUGIN_DEBUG
-    ltime = time(NULL);
-    timestamp = asctime(localtime(&ltime));
-    timestamp[strlen(timestamp) - 1] = 0;
-    fprintf(Logfile, "[%s] [CCCAController::Disconnect] disconnected from device\n", timestamp);
-    fflush(Logfile);
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Disconnect] Disconnected from device." << std::endl;
+    m_sLogFile.flush();
 #endif
 }
 
@@ -256,13 +229,9 @@ int CCCAController::haltFocuser()
         cHIDBuffer[2] = Stop; // command
 
     #ifdef PLUGIN_DEBUG
-        byte hexBuffer[DATA_BUFFER_SIZE * 4];
-        hexdump(cHIDBuffer, hexBuffer, REPORT_1_SIZE);
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::haltFocuser] sending : %s\n", timestamp, hexBuffer);
-        fflush(Logfile);
+        hexdump(cHIDBuffer,  REPORT_1_SIZE, hexOut);
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [haltFocuser] sending : " << hexOut << std::endl;
+        m_sLogFile.flush();
     #endif
         if(m_DevAccessMutex.try_lock()) {
             nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
@@ -294,11 +263,8 @@ int CCCAController::gotoPosition(int nPos)
 
     if(m_bIsHold && !m_bIsMoving) {
     #ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::gotoPosition] goto position  : %d (0x%08X)\n", timestamp, nPos, nPos);
-        fflush(Logfile);
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] goto :  " << nPos << " (0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << nPos <<")"<< std::endl;
+        m_sLogFile.flush();
     #endif
         cHIDBuffer[0] = 0x00; // report ID
         cHIDBuffer[1] = 0x05; // size is 5 bytes
@@ -310,13 +276,9 @@ int CCCAController::gotoPosition(int nPos)
         cHIDBuffer[7] = 0x00;
         
     #ifdef PLUGIN_DEBUG
-        byte hexBuffer[DATA_BUFFER_SIZE * 4];
-        hexdump(cHIDBuffer, hexBuffer, REPORT_0_SIZE);
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::gotoPosition] sending : %s\n", timestamp, hexBuffer);
-        fflush(Logfile);
+        hexdump(cHIDBuffer,  REPORT_0_SIZE, hexOut);
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] sending : " << hexOut << std::endl;
+        m_sLogFile.flush();
     #endif
 
         if(m_DevAccessMutex.try_lock()) {
@@ -329,11 +291,8 @@ int CCCAController::gotoPosition(int nPos)
             nErr = ERR_CMDFAILED;
         }
     #ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::gotoPosition] nByteWriten = %d\n", timestamp, nByteWriten);
-        fflush(Logfile);
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] nByteWriten : " << nByteWriten << std::endl;
+        m_sLogFile.flush();
     #endif
     }
     m_gotoTimer.Reset();
@@ -348,11 +307,8 @@ int CCCAController::moveRelativeToPosision(int nSteps)
 		return ERR_COMMNOLINK;
 
 #ifdef PLUGIN_DEBUG
-    ltime = time(NULL);
-    timestamp = asctime(localtime(&ltime));
-    timestamp[strlen(timestamp) - 1] = 0;
-    fprintf(Logfile, "[%s] CCCAController::gotoPosition goto relative position  : %d\n", timestamp, nSteps);
-    fflush(Logfile);
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [moveRelativeToPosision] goto relative position : " << nSteps << std::endl;
+    m_sLogFile.flush();
 #endif
 
     m_nTargetPos = m_nCurPos + nSteps;
@@ -387,11 +343,8 @@ int CCCAController::isGoToComplete(bool &bComplete)
     if(m_nCurPos != m_nTargetPos) {
         // we have an error as we're not moving but not at the target position
 #ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::isGoToComplete] **** ERROR **** Not moving and not at the target position\n", timestamp);
-        fflush(Logfile);
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [isGoToComplete] **** ERROR **** Not moving and not at the target position." << std::endl;
+        m_sLogFile.flush();
 #endif
         m_nTargetPos = m_nCurPos;
         nErr = ERR_CMDFAILED;
@@ -498,16 +451,10 @@ int CCCAController::setFanOn(bool bOn)
     else
         cHIDBuffer[2] = FanOff; // command
 
-   
-
 #ifdef PLUGIN_DEBUG
-    byte hexBuffer[DATA_BUFFER_SIZE * 4];
-    hexdump(cHIDBuffer, hexBuffer, REPORT_1_SIZE);
-    ltime = time(NULL);
-    timestamp = asctime(localtime(&ltime));
-    timestamp[strlen(timestamp) - 1] = 0;
-    fprintf(Logfile, "[%s] [CCCAController::setFanOn] sending : %s\n", timestamp, hexBuffer);
-    fflush(Logfile);
+    hexdump(cHIDBuffer,  REPORT_1_SIZE, hexOut);
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] sending : " << hexOut << std::endl;
+    m_sLogFile.flush();
 #endif
     if(m_DevAccessMutex.try_lock()) {
         nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
@@ -546,12 +493,9 @@ void CCCAController::setRestorePosition(int nPosition, bool bRestoreOnConnect)
     m_nSavedPosistion = nPosition;
     
 #ifdef PLUGIN_DEBUG
-    ltime = time(NULL);
-    timestamp = asctime(localtime(&ltime));
-    timestamp[strlen(timestamp) - 1] = 0;
-    fprintf(Logfile, "[%s] [CCCAController::setRestorePosition] m_bRestorePosition = %s\n", timestamp, m_bRestorePosition?"Yes":"No");
-    fprintf(Logfile, "[%s] [CCCAController::setRestorePosition] m_nSavedPosistion = %d\n", timestamp, m_nSavedPosistion);
-    fflush(Logfile);
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setRestorePosition] m_bRestorePosition : " << (m_bRestorePosition?"Yes":"No") << std::endl;
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setRestorePosition] m_nSavedPosistion : " << m_nSavedPosistion << std::endl;
+    m_sLogFile.flush();
 #endif
 
 }
@@ -566,13 +510,9 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
     const std::lock_guard<std::mutex> lock(m_GlobalMutex);
 
 #ifdef PLUGIN_DEBUG
-        byte hexBuffer[DATA_BUFFER_SIZE * 4];
-        hexdump(Buffer, hexBuffer, (nLength > DATA_BUFFER_SIZE-1 ? DATA_BUFFER_SIZE -1 : nLength));
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] Buffer size %d, content :\n%s\n", timestamp, nLength, hexBuffer);
-        fflush(Logfile);
+    hexdump(Buffer,  nLength, hexOut);
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] Buffer size " << nLength <<", content : " << std::endl << hexOut << std::endl;
+    m_sLogFile.flush();
 #endif
 
     if((Buffer[0] == 0x3C) && (nLength >=64)) {
@@ -605,37 +545,34 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         m_nBacklashSteps        = Get32(Buffer, 57);
          
 #ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nCurPos             : %d\n", timestamp, m_nCurPos);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bIsWired            : %s\n", timestamp, m_bIsWired?"Yes":"No");
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bIsAtOrigin         : %s\n", timestamp, m_bIsAtOrigin?"Yes":"No");
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bIsMoving           : %s\n", timestamp, m_bIsMoving?"Yes":"No");
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bFanIsOn            : %s\n", timestamp, m_bFanIsOn?"Yes":"No");
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_bIsHold             : %s\n", timestamp, m_bIsHold?"Yes":"No");
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nDriveMode          : %d\n", timestamp, m_nDriveMode);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nStepSize           : %d\n", timestamp, m_nStepSize);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nBitsFlag           : %d\n", timestamp, m_nBitsFlag);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nAirTempOffset      : %d\n", timestamp, m_nAirTempOffset);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nTubeTempOffset     : %d\n", timestamp, m_nTubeTempOffset);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nMirorTempOffset    : %d\n", timestamp, m_nMirorTempOffset);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nDeltaT             : %d\n", timestamp, m_nDeltaT);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nStillTime          : %d\n", timestamp, m_nStillTime);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_sVersion            : %s\n", timestamp, m_sVersion.c_str());
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nBackstep           : %d\n", timestamp, m_nBackstep);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nBacklash           : %d\n", timestamp, m_nBacklash);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_dMillimetersPerStep : %f\n", timestamp, m_dMillimetersPerStep);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nMaxPos             : %d\n", timestamp, m_nMaxPos);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nPreset0            : %d\n", timestamp, m_nPreset0);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nPreset1            : %d\n", timestamp, m_nPreset1);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nPreset2            : %d\n", timestamp, m_nPreset2);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nPreset3            : %d\n", timestamp, m_nPreset3);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fAirTemp            : %3.2f\n", timestamp, m_fAirTemp);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fTubeTemp           : %3.2f\n", timestamp, m_fTubeTemp);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_fMirorTemp          : %3.2f\n", timestamp, m_fMirorTemp);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nBacklashSteps      : %d\n", timestamp, m_nBacklashSteps);
-        fflush(Logfile);
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nCurPos                :" << m_nCurPos << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsWired               :" << (m_bIsWired?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsAtOrigin            :" << (m_bIsAtOrigin?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsMoving              :" << (m_bIsMoving?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bFanIsOn               :" << (m_bFanIsOn?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsHold                :" << (m_bIsHold?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nDriveMode             :" << m_nDriveMode << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nStepSize              :" << m_nStepSize << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBitsFlag              :" << m_nBitsFlag << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nAirTempOffset         :" << m_nAirTempOffset << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nTubeTempOffset        :" << m_nTubeTempOffset << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMirorTempOffset       :" << m_nMirorTempOffset << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nDeltaT                :" << m_nDeltaT << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nStillTime             :" << m_nStillTime << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_sVersion               :" << m_sVersion << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBackstep              :" << m_nBackstep << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBacklash              :" << m_nBacklash << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_dMillimetersPerStep    :" << m_dMillimetersPerStep << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMaxPos                :" << m_nMaxPos << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset0               :" << m_nPreset0 << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset1               :" << m_nPreset1 << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset2               :" << m_nPreset2 << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset3               :" << m_nPreset3 << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_fAirTemp               :" << m_fAirTemp << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_fTubeTemp              :" << m_fTubeTemp << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_fMirorTemp             :" << m_fMirorTemp << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBacklashSteps         :" << m_nBacklashSteps << std::endl;
+        m_sLogFile.flush();
 #endif
          if(m_bFanIsOn != m_bSetFanOn)
              setFanOn(m_bSetFanOn);
@@ -649,18 +586,15 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         m_nFanTimer         = Get16(Buffer, 12);
         m_nOriginOffset     = Get16(Buffer, 14);
 #ifdef PLUGIN_DEBUG
-        ltime = time(NULL);
-        timestamp = asctime(localtime(&ltime));
-        timestamp[strlen(timestamp) - 1] = 0;
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nMaxPps             : %d\n", timestamp, m_nMaxPps);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nMinPps             : %d\n", timestamp, m_nMinPps);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nGetbackRate        : %d\n", timestamp, m_nGetbackRate);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nBatteryMaxRate     : %d\n", timestamp, m_nBatteryMaxRate);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nPowerTimer         : %d\n", timestamp, m_nPowerTimer);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nTubeTempOffset     : %d\n", timestamp, m_nTubeTempOffset);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nMirorTempOffset    : %d\n", timestamp, m_nMirorTempOffset);
-        fprintf(Logfile, "[%s] [CCCAController::parseResponse] m_nOriginOffset       : %d\n", timestamp, m_nOriginOffset);
-        fflush(Logfile);
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMaxPps            :" << m_nMaxPps << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMinPps            :" << m_nMinPps << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nGetbackRate       :" << m_nGetbackRate << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBatteryMaxRate    :" << m_nBatteryMaxRate << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPowerTimer        :" << m_nPowerTimer << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nTubeTempOffset    :" << m_nTubeTempOffset << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMirorTempOffset   :" << m_nMirorTempOffset << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nOriginOffset      :" << m_nOriginOffset << std::endl;
+        m_sLogFile.flush();
 #endif
     }
 
@@ -685,16 +619,27 @@ int CCCAController::Get16(const byte *buffer, int position)
 }
 
 #ifdef PLUGIN_DEBUG
-void  CCCAController::hexdump(const byte* inputData, byte *outBuffer, int size)
+void  CCCAController::hexdump(const byte *inputData, int inputSize,  std::string &outHex)
 {
-    byte *buf = outBuffer;
     int idx=0;
-    for(idx=0; idx<size; idx++){
-        snprintf((char *)buf,4,"%02X ", inputData[idx]);
-        buf+=3;
+    std::stringstream ssTmp;
+    outHex.clear();
+
+    // << std::uppercase << std::setfill('0') << std::setw(4) << std::hex <<
+    for(idx=0; idx<inputSize; idx++){
+        ssTmp << "0x" << std::uppercase << std::setfill('0') << std::setw(2) << std::hex << (int)inputData[idx] <<" ";
     }
-    *buf = 0;
+    outHex.assign(ssTmp.str());
 }
 
-#endif
+const std::string CCCAController::getTimeStamp()
+{
+    time_t     now = time(0);
+    struct tm  tstruct;
+    char       buf[80];
+    tstruct = *localtime(&now);
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
 
+    return buf;
+}
+#endif

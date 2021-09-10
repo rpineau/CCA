@@ -169,8 +169,7 @@ int	X2Focuser::execModalSettingsDialog(void)
     X2GUIInterface*					ui = uiutil.X2UI();
     X2GUIExchangeInterface*			dx = NULL;//Comes after ui is loaded
     bool bPressedOK = false;
-    double dTemperature;
-    char szTmp[255];
+    std::stringstream sTmpBuf;
     int nTmp;
     bool bTmp;
     
@@ -188,18 +187,16 @@ int	X2Focuser::execModalSettingsDialog(void)
     X2MutexLocker ml(GetMutex());
 	// set controls values
     if(m_bLinked) {
-
-        dTemperature = m_CCAController.getTemperature(AIR);
-        snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
-        dx->setText("airTemp", szTmp);
+        sTmpBuf << std::fixed << std::setprecision(2) << m_CCAController.getTemperature(AIR) << "ºC";
+        dx->setText("airTemp", sTmpBuf.str().c_str());
         
-        dTemperature = m_CCAController.getTemperature(TUBE);
-        snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
-        dx->setText("tubeTemp", szTmp);
+        std::stringstream().swap(sTmpBuf);
+        sTmpBuf << std::fixed << std::setprecision(2) << m_CCAController.getTemperature(TUBE) << "ºC";
+        dx->setText("tubeTemp", sTmpBuf.str().c_str());
         
-        dTemperature = m_CCAController.getTemperature(MIRROR);
-        snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
-        dx->setText("mirrorTemp", szTmp);
+        std::stringstream().swap(sTmpBuf);
+        sTmpBuf << std::fixed << std::setprecision(2) << m_CCAController.getTemperature(MIRROR) << "ºC";
+        dx->setText("mirrorTemp", sTmpBuf.str().c_str());
     }
     else {
         dx->setText("airTemp", "");
@@ -250,22 +247,20 @@ int	X2Focuser::execModalSettingsDialog(void)
 
 void X2Focuser::uiEvent(X2GUIExchangeInterface* uiex, const char* pszEvent)
 {
-    double dTemperature;
-    char szTmp[255];
+    std::stringstream sTmpBuf;
 
     if (!strcmp(pszEvent, "on_timer")) {
         if(m_bLinked) {
-            dTemperature = m_CCAController.getTemperature(AIR);
-            snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
-            uiex->setText("airTemp", szTmp);
+            sTmpBuf << std::fixed << std::setprecision(2) << m_CCAController.getTemperature(AIR) << "ºC";
+            uiex->setText("airTemp", sTmpBuf.str().c_str());
             
-            dTemperature = m_CCAController.getTemperature(TUBE);
-            snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
-            uiex->setText("tubeTemp", szTmp);
+            std::stringstream().swap(sTmpBuf);
+            sTmpBuf << std::fixed << std::setprecision(2) << m_CCAController.getTemperature(TUBE) << "ºC";
+            uiex->setText("tubeTemp", sTmpBuf.str().c_str());
             
-            dTemperature = m_CCAController.getTemperature(MIRROR);
-            snprintf(szTmp, 255, "%3.2f ºC", dTemperature);
-            uiex->setText("mirrorTemp", szTmp);
+            std::stringstream().swap(sTmpBuf);
+            sTmpBuf << std::fixed << std::setprecision(2) << m_CCAController.getTemperature(MIRROR) << "ºC";
+            uiex->setText("mirrorTemp", sTmpBuf.str().c_str());
         }
     }
     
