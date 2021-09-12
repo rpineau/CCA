@@ -12,15 +12,13 @@ void threaded_sender(std::future<void> futureObj, CCCAController *CCAControllerO
     const byte cmdData[3] = {0x00, 0x01, Dummy};
 
     while (futureObj.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout) {
-        if(hidDevice) {
-            if(CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
-                hid_write(hidDevice, cmdData, sizeof(cmdData));
-                CCAControllerObj->m_DevAccessMutex.unlock();
-            }
-            else {
-                std::this_thread::yield();
-                continue;
-            }
+        if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
+            hid_write(hidDevice, cmdData, sizeof(cmdData));
+            CCAControllerObj->m_DevAccessMutex.unlock();
+        }
+        else {
+            std::this_thread::yield();
+            continue;
         }
     }
 }
@@ -36,22 +34,18 @@ void threaded_poller(std::future<void> futureObj, CCCAController *CCAControllerO
 #endif
 
     while (futureObj.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
-        if(hidDevice) {
+        if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
 #ifndef LOCAL_DEBUG
-            if(CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
-                nbRead = hid_read(hidDevice, cHIDBuffer, sizeof(cHIDBuffer));
-                CCAControllerObj->m_DevAccessMutex.unlock();
-            }
-            else {
-                std::this_thread::yield();
-                continue;
-            }
+            nbRead = hid_read(hidDevice, cHIDBuffer, sizeof(cHIDBuffer));
+            CCAControllerObj->m_DevAccessMutex.unlock();
 #endif
             if(nbRead>0){
-                if(CCAControllerObj) {
-                    CCAControllerObj->parseResponse(cHIDBuffer, nbRead);
-                }
+                CCAControllerObj->parseResponse(cHIDBuffer, nbRead);
             }
+        }
+        else {
+            std::this_thread::yield();
+            continue;
         }
     }
 }
@@ -172,6 +166,8 @@ int CCCAController::Connect()
 
 void CCCAController::Disconnect()
 {
+    const std::lock_guard<std::mutex> lock(m_DevAccessMutex);
+
 #ifdef PLUGIN_DEBUG
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Disconnect] Disconnecting from device." << std::endl;
     m_sLogFile.flush();
