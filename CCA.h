@@ -186,9 +186,9 @@ protected:
     // threads
     bool                m_ThreadsAreRunning;
     std::promise<void> *m_exitSignal;
-    std::future<void>   m_futureObj; // = exitSignal.get_future();
+    std::future<void>   m_futureObj;
     std::promise<void> *m_exitSignalSender;
-    std::future<void>   m_futureObjSender; // = exitSignalSender.get_future();
+    std::future<void>   m_futureObjSender;
     std::thread         m_th;
     std::thread         m_thSender;
 

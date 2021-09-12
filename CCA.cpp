@@ -18,7 +18,6 @@ void threaded_sender(std::future<void> futureObj, CCCAController *CCAControllerO
         }
         else {
             std::this_thread::yield();
-            continue;
         }
     }
 }
@@ -37,15 +36,14 @@ void threaded_poller(std::future<void> futureObj, CCCAController *CCAControllerO
         if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
 #ifndef LOCAL_DEBUG
             nbRead = hid_read(hidDevice, cHIDBuffer, sizeof(cHIDBuffer));
-            CCAControllerObj->m_DevAccessMutex.unlock();
 #endif
+            CCAControllerObj->m_DevAccessMutex.unlock();
             if(nbRead>0){
                 CCAControllerObj->parseResponse(cHIDBuffer, nbRead);
             }
         }
         else {
             std::this_thread::yield();
-            continue;
         }
     }
 }
