@@ -25,18 +25,18 @@ void threaded_sender(std::future<void> futureObj, CCCAController *CCAControllerO
 void threaded_poller(std::future<void> futureObj, CCCAController *CCAControllerObj, hid_device *hidDevice)
 {
     int nbRead;
-#ifdef LOCAL_DEBUG
-    byte cHIDBuffer[DATA_BUFFER_SIZE] = {0x3C, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xA1, 0x04, 0x07, 0x00, 0x2A, 0x80, 0x80, 0x80, 0x1E, 0x0A, 0x01, 0x10, 0x03, 0xC1, 0x01, 0x80, 0x00, 0x34, 0x00, 0x02, 0xEF, 0x33, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x6C, 0x00, 0x00, 0x00, 0x70, 0x00, 0x00, 0x01, 0xF0, 0x08, 0x5C};
-    nbRead = 64;
-#else
+//#ifdef LOCAL_DEBUG
+//    byte cHIDBuffer[DATA_BUFFER_SIZE] = {0x3C, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xA1, 0x04, 0x07, 0x00, 0x2A, 0x80, 0x80, 0x80, 0x1E, 0x0A, 0x01, 0x10, 0x03, 0xC1, 0x01, 0x80, 0x00, 0x34, 0x00, 0x02, 0xEF, 0x33, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x6C, 0x00, 0x00, 0x00, 0x70, 0x00, 0x00, 0x01, 0xF0, 0x08, 0x5C, 0x00, 0x00};
+//    nbRead = 64;
+//#else
     byte cHIDBuffer[DATA_BUFFER_SIZE];
-#endif
+//#endif
 
     while (futureObj.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
         if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
-#ifndef LOCAL_DEBUG
+//#ifndef LOCAL_DEBUG
             nbRead = hid_read(hidDevice, cHIDBuffer, sizeof(cHIDBuffer));
-#endif
+//#endif
             CCAControllerObj->m_DevAccessMutex.unlock();
             if(nbRead>0){
                 CCAControllerObj->parseResponse(cHIDBuffer, nbRead);
@@ -124,7 +124,7 @@ int CCCAController::Connect()
     if (!m_DevHandle) {
         m_bIsConnected = false;
 #ifdef PLUGIN_DEBUG
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Connect] hid_open failed for vendor id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex <<  VENDOR_ID << " product id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << PRODUCT_ID << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Connect] hid_open failed for vendor id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex <<  VENDOR_ID << " product id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << PRODUCT_ID << std::dec << std::endl;
         m_sLogFile.flush();
 #endif
         return CCA_CANT_CONNECT;
@@ -132,7 +132,7 @@ int CCCAController::Connect()
     m_bIsConnected = true;
 
 #ifdef PLUGIN_DEBUG
-    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Connect] Connected to vendor id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex <<  VENDOR_ID << " product id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << PRODUCT_ID << std::endl;
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Connect] Connected to vendor id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex <<  VENDOR_ID << " product id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << PRODUCT_ID << std::dec << std::endl;
     m_sLogFile.flush();
 #endif
 
@@ -257,7 +257,7 @@ int CCCAController::gotoPosition(int nPos)
 
     if(m_bIsHold && !m_bIsMoving) {
     #ifdef PLUGIN_DEBUG
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] goto :  " << nPos << " (0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << nPos <<")"<< std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] goto :  " << std::dec << nPos << " (0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << nPos <<")" << std::dec << std::endl;
         m_sLogFile.flush();
     #endif
         cHIDBuffer[0] = 0x00; // report ID
@@ -505,7 +505,7 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
 
 #ifdef PLUGIN_DEBUG
     hexdump(Buffer,  nLength, hexOut);
-    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] Buffer size " << nLength <<", content : " << std::endl << hexOut << std::endl;
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] Buffer size " << std::dec << nLength <<", content : " << std::endl << hexOut << std::endl;
     m_sLogFile.flush();
 #endif
 
@@ -539,33 +539,33 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         m_nBacklashSteps        = Get32(Buffer, 57);
          
 #ifdef PLUGIN_DEBUG
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nCurPos                :" << m_nCurPos << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsWired               :" << (m_bIsWired?"Yes":"No") << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsAtOrigin            :" << (m_bIsAtOrigin?"Yes":"No") << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsMoving              :" << (m_bIsMoving?"Yes":"No") << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bFanIsOn               :" << (m_bFanIsOn?"Yes":"No") << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsHold                :" << (m_bIsHold?"Yes":"No") << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nDriveMode             :" << m_nDriveMode << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nStepSize              :" << m_nStepSize << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBitsFlag              :" << m_nBitsFlag << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nAirTempOffset         :" << m_nAirTempOffset << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nTubeTempOffset        :" << m_nTubeTempOffset << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMirorTempOffset       :" << m_nMirorTempOffset << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nDeltaT                :" << m_nDeltaT << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nStillTime             :" << m_nStillTime << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_sVersion               :" << m_sVersion << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBackstep              :" << m_nBackstep << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBacklash              :" << m_nBacklash << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_dMillimetersPerStep    :" << m_dMillimetersPerStep << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMaxPos                :" << m_nMaxPos << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset0               :" << m_nPreset0 << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset1               :" << m_nPreset1 << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset2               :" << m_nPreset2 << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset3               :" << m_nPreset3 << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_fAirTemp               :" << m_fAirTemp << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_fTubeTemp              :" << m_fTubeTemp << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_fMirorTemp             :" << m_fMirorTemp << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBacklashSteps         :" << m_nBacklashSteps << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nCurPos                : " << std::dec << m_nCurPos << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsWired               : " << (m_bIsWired?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsAtOrigin            : " << (m_bIsAtOrigin?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsMoving              : " << (m_bIsMoving?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bFanIsOn               : " << (m_bFanIsOn?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsHold                : " << (m_bIsHold?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nDriveMode             : " << std::dec << int(m_nDriveMode) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nStepSize              : " << std::dec << int(m_nStepSize) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBitsFlag              : " << std::dec << int(m_nBitsFlag) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nAirTempOffset         : " << std::dec << m_nAirTempOffset << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nTubeTempOffset        : " << std::dec << m_nTubeTempOffset << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMirorTempOffset       : " << std::dec << m_nMirorTempOffset << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nDeltaT                : " << std::dec << int(m_nDeltaT) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nStillTime             : " << std::dec << int(m_nStillTime) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_sVersion               : " << m_sVersion << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBackstep              : " << std::dec << int(m_nBackstep) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBacklash              : " << std::dec << int(m_nBacklash) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_dMillimetersPerStep    : " << std::fixed << std::setprecision(6) << m_dMillimetersPerStep << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMaxPos                : " << std::dec << m_nMaxPos << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset0               : " << std::dec << m_nPreset0 << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset1               : " << std::dec << m_nPreset1 << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset2               : " << std::dec << m_nPreset2 << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset3               : " << std::dec << m_nPreset3 << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_fAirTemp               : " << std::fixed << std::setprecision(2) << m_fAirTemp << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_fTubeTemp              : " << std::fixed << std::setprecision(2) << m_fTubeTemp << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_fMirorTemp             : " << std::fixed << std::setprecision(2) << m_fMirorTemp << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBacklashSteps         : " << std::dec << m_nBacklashSteps << std::endl;
         m_sLogFile.flush();
 #endif
          if(m_bFanIsOn != m_bSetFanOn)
@@ -580,14 +580,14 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         m_nFanTimer         = Get16(Buffer, 12);
         m_nOriginOffset     = Get16(Buffer, 14);
 #ifdef PLUGIN_DEBUG
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMaxPps            :" << m_nMaxPps << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMinPps            :" << m_nMinPps << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nGetbackRate       :" << m_nGetbackRate << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBatteryMaxRate    :" << m_nBatteryMaxRate << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPowerTimer        :" << m_nPowerTimer << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nTubeTempOffset    :" << m_nTubeTempOffset << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMirorTempOffset   :" << m_nMirorTempOffset << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nOriginOffset      :" << m_nOriginOffset << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMaxPps            : " << std::dec << m_nMaxPps << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMinPps            : " << std::dec << m_nMinPps << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nGetbackRate       : " << std::dec << int(m_nGetbackRate) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBatteryMaxRate    : " << std::dec << int(m_nBatteryMaxRate) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPowerTimer        : " << std::dec << m_nPowerTimer << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nTubeTempOffset    : " << std::dec << m_nTubeTempOffset << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMirorTempOffset   : " << std::dec << m_nMirorTempOffset << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nOriginOffset      : " << std::dec << m_nOriginOffset << std::endl;
         m_sLogFile.flush();
 #endif
     }
@@ -617,9 +617,8 @@ void  CCCAController::hexdump(const byte *inputData, int inputSize,  std::string
 {
     int idx=0;
     std::stringstream ssTmp;
-    outHex.clear();
 
-    // << std::uppercase << std::setfill('0') << std::setw(4) << std::hex <<
+    outHex.clear();
     for(idx=0; idx<inputSize; idx++){
         ssTmp << "0x" << std::uppercase << std::setfill('0') << std::setw(2) << std::hex << (int)inputData[idx] <<" ";
     }
