@@ -42,7 +42,7 @@
 #define REPORT_0_SIZE   8
 #define REPORT_1_SIZE   3
 
-#define LOCAL_DEBUG
+// #define LOCAL_DEBUG
 #ifndef LOCAL_DEBUG
 #define VENDOR_ID   0x20E1
 #define PRODUCT_ID  0x0002
@@ -50,9 +50,6 @@
 // just to test HID stuff with my only HID device that is not a keyboard or a mouse
 #define VENDOR_ID 0x2341    // Arduino
 #define PRODUCT_ID 0x8036   // Leonardo
-
-// #define VENDOR_ID 0x10cf    //
-// #define PRODUCT_ID 0x5500 // K8055
 #endif
 
 enum CCA_Errors    {PLUGIN_OK = 0, NOT_CONNECTED, CCA_CANT_CONNECT, CCA_BAD_CMD_RESPONSE, COMMAND_FAILED};
