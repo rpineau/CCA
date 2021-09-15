@@ -27,12 +27,11 @@
 #include <fstream>
 
 #include "../../licensedinterfaces/sberrorx.h"
-#include "../../licensedinterfaces/sleeperinterface.h"
 
 #include "hidapi.h"
 #include "StopWatch.h"
 
-#define PLUGIN_VERSION      1.0
+#define PLUGIN_VERSION      1.1
 
 #define PLUGIN_DEBUG 3
 
@@ -89,8 +88,6 @@ public:
     void        Disconnect(void);
     bool        IsConnected(void) { return m_bIsConnected; };
 
-    void        setSleeper(SleeperInterface *pSleeper) { m_pSleeper = pSleeper; };
-
     // move commands
     int         haltFocuser();
     int         gotoPosition(int nPos);
@@ -123,8 +120,6 @@ protected:
 
     int             Get32(const byte *buffer, int position);
     int             Get16(const byte *buffer, int position);
-
-    SleeperInterface    *m_pSleeper;
 
     hid_device      *m_DevHandle;
     

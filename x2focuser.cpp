@@ -22,8 +22,6 @@ X2Focuser::X2Focuser(const char* pszDisplayName,
 	m_bLinked = false;
 	m_nPosition = 0;
 
-    m_CCAController.setSleeper(m_pSleeper);
-
     // Read in settings
     if (m_pIniUtil) {
         m_CCAController.setTemperatureSource(m_pIniUtil->readInt(PARENT_KEY, TEMP_SOURCE, AIR));
@@ -45,7 +43,6 @@ X2Focuser::~X2Focuser()
 		delete GetLogger();
 	if (GetMutex())
 		delete GetMutex();
-
 }
 
 #pragma mark - DriverRootInterface
