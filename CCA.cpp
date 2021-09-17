@@ -516,6 +516,7 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         m_bIsAtOrigin           = (Buffer[7] & 128) != 0;
         m_bIsMoving             = (Buffer[7] &  64) != 0;
         m_bFanIsOn              = (Buffer[7] &  32) != 0;
+        m_bIsBatteryOperated    = (Buffer[7] &  16) != 0;
         m_bIsHold               = (Buffer[7] &   3) != 0;
         m_nDriveMode            = Buffer[8];
         m_nStepSize             = Buffer[9];
@@ -529,7 +530,7 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         m_nBackstep             = Get16(Buffer, 19);
         m_nBacklash             = Get16(Buffer, 21);
         m_nImmpp                = Get16(Buffer,23);
-        m_dMillimetersPerStep   = Get16(Buffer,23) / 1000000.0;
+        m_dMillimetersPerStep   = m_nImmpp / 1000000.0;
         m_nMaxPos               = Get32(Buffer, 25);
 
         nTmp                    = Get32(Buffer, 29);
@@ -571,18 +572,20 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsAtOrigin            : " << (m_bIsAtOrigin?"Yes":"No") << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsMoving              : " << (m_bIsMoving?"Yes":"No") << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bFanIsOn               : " << (m_bFanIsOn?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsBatteryOperated     : " << (m_bIsBatteryOperated?"Yes":"No") << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsHold                : " << (m_bIsHold?"Yes":"No") << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nDriveMode             : " << std::dec << int(m_nDriveMode) << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nStepSize              : " << std::dec << int(m_nStepSize) << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBitsFlag              : " << std::dec << int(m_nBitsFlag) << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nAirTempOffset         : " << std::dec << m_nAirTempOffset << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nTubeTempOffset        : " << std::dec << m_nTubeTempOffset << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMirorTempOffset       : " << std::dec << m_nMirorTempOffset << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nAirTempOffset         : " << std::dec << int(m_nAirTempOffset) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nTubeTempOffset        : " << std::dec << int(m_nTubeTempOffset) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMirorTempOffset       : " << std::dec << int(m_nMirorTempOffset) << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nDeltaT                : " << std::dec << int(m_nDeltaT) << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nStillTime             : " << std::dec << int(m_nStillTime) << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_sVersion               : " << m_sVersion << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBackstep              : " << std::dec << int(m_nBackstep) << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBacklash              : " << std::dec << int(m_nBacklash) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nImmpp                 : " << std::dec << m_nImmpp << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_dMillimetersPerStep    : " << std::fixed << std::setprecision(6) << m_dMillimetersPerStep << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMaxPos                : " << std::dec << m_nMaxPos << std::endl;
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset0               : " << std::dec << m_nPreset0 << std::endl;
@@ -636,7 +639,7 @@ int CCCAController::sendSettings()
     cHIDBuffer[0] = 0x00; // report ID
     cHIDBuffer[1] = 38; // size
     cHIDBuffer[2] = Settings; // command
-    cHIDBuffer[3] = m_W_nDriveMode;
+    cHIDBuffer[3] = 4; // m_W_nDriveMode;
     cHIDBuffer[4] = m_W_nStepSize;
     cHIDBuffer[5] = 0; // ??
     cHIDBuffer[6] = m_W_nBitsFlag;
@@ -723,6 +726,43 @@ int CCCAController::sendSettings2()
 
     return nErr;
 }
+
+
+int CCCAController::resetToFactoryDefault()
+{
+    int nErr = PLUGIN_OK;
+    // factory settings
+    m_W_nStepSize = 7;
+    m_W_nBitsFlag = 40;
+    m_W_nAirTempOffset = 128;
+    m_W_nTubeTempOffset = 128;
+    m_W_nMirorTempOffset = 128;
+    m_W_nDeltaT = 30;
+    m_W_nStillTime = 10;
+    m_W_nImmpp = 52;
+    m_W_nBackstep = 961;
+    m_W_nBacklash = 384;
+    m_W_nMaxPos = 192307;
+    m_W_nPreset0 = 0;
+    m_W_nPreset1 = 0;
+    m_W_nPreset2 = 0;
+    m_W_nPreset3 = 0;
+
+    m_W_nMaxPps = 18000;
+    m_W_nMinPps = 250;
+    m_W_nTorqueIndex = 2;
+    m_W_nGetbackRate = 120;
+    m_W_nBatteryMaxRate = 43;
+    m_W_nPowerTimer = 10;
+    m_W_nFanTimer = 600;
+    m_W_nOriginOffset = 0;
+
+    nErr = sendSettings();
+    nErr |= sendSettings2();
+
+    return nErr;
+}
+
 int CCCAController::Get32(const byte *buffer, int position)
 {
 

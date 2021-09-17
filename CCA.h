@@ -41,7 +41,7 @@
 #define REPORT_0_SIZE   8
 #define REPORT_1_SIZE   3
 
-// #define LOCAL_DEBUG
+#define LOCAL_DEBUG
 #ifndef LOCAL_DEBUG
 #define VENDOR_ID   0x20E1
 #define PRODUCT_ID  0x0002
@@ -56,7 +56,7 @@ enum MotorDir       {NORMAL = 0 , REVERSE};
 enum MotorStatus    {IDLE = 0, MOVING};
 enum TempSources    {AIR, TUBE, MIRROR};
 typedef unsigned char byte;
-
+typedef unsigned short word;
 
 typedef enum {
     Clockwise = 0x01,
@@ -76,6 +76,7 @@ typedef enum {
     Reset = 0x7E,
     Dummy = 0xFF
 } Commands;
+
 
 
 class CCCAController
@@ -114,6 +115,7 @@ public:
     void        parseResponse(byte *Buffer, int nLength);
     int         sendSettings();
     int         sendSettings2();
+    int         resetToFactoryDefault();
 
     std::mutex          m_GlobalMutex;
     std::mutex          m_DevAccessMutex;
@@ -150,15 +152,15 @@ protected:
     std::atomic<byte>           m_nDriveMode;
     std::atomic<byte>           m_nStepSize;
     std::atomic<byte>           m_nBitsFlag;    // Settings.BitFlags = (byte)(SystemState.BitFlags & -16 | (BlackoutLedCheckbox.Checked ? 2 : 0) | (AutoFanControlCheckbox.Checked ? 4 : 0) | (AutoSynchronizeCheckbox.Checked ? 8 : 0));
-    std::atomic<int>            m_nAirTempOffset;
-    std::atomic<int>            m_nTubeTempOffset;
-    std::atomic<int>            m_nMirorTempOffset;
+    std::atomic<byte>           m_nAirTempOffset;   // (value -128)/10.0
+    std::atomic<byte>           m_nTubeTempOffset;  // (value -128)/10.0
+    std::atomic<byte>           m_nMirorTempOffset; // (value -128)/10.0
     std::atomic<byte>           m_nDeltaT;
     std::atomic<byte>           m_nStillTime;
     std::string                 m_sVersion;
-    std::atomic<byte>           m_nBackstep;
-    std::atomic<byte>           m_nBacklash;
-    std::atomic<int>            m_nImmpp;
+    std::atomic<word>           m_nBackstep;
+    std::atomic<word>           m_nBacklash;
+    std::atomic<word>           m_nImmpp;
     std::atomic<double>         m_dMillimetersPerStep;
     std::atomic<int>            m_nMaxPos;
     std::atomic<int>            m_nPreset0;
@@ -171,13 +173,13 @@ protected:
     std::atomic<int>            m_nBacklashSteps;
     
     // Takahashi focuser data for 0x11 from device
-    std::atomic<int>            m_nMaxPps;
-    std::atomic<int>            m_nMinPps;
+    std::atomic<word>           m_nMaxPps;
+    std::atomic<word>           m_nMinPps;
     std::atomic<byte>           m_nGetbackRate;
     std::atomic<byte>           m_nBatteryMaxRate;
-    std::atomic<int>            m_nPowerTimer;
-    std::atomic<int>            m_nFanTimer;
-    std::atomic<int>            m_nOriginOffset;
+    std::atomic<word>           m_nPowerTimer;
+    std::atomic<word>           m_nFanTimer;
+    std::atomic<word>           m_nOriginOffset;
     std::atomic<bool>           m_bSetFanOn;
     std::atomic<bool>           m_bRestorePosition;
     std::atomic<int>            m_nSavedPosistion;
@@ -188,15 +190,15 @@ protected:
     // Takahashi focuser data for 0x3C to device
     std::atomic<byte>           m_W_nDriveMode;
     std::atomic<byte>           m_W_nStepSize;
-    std::atomic<byte>           m_W_nBitsFlag;    // Settings.BitFlags = (byte)(SystemState.BitFlags & -16 | (BlackoutLedCheckbox.Checked ? 2 : 0) | (AutoFanControlCheckbox.Checked ? 4 : 0) | (AutoSynchronizeCheckbox.Checked ? 8 : 0));
-    std::atomic<int>            m_W_nAirTempOffset;
-    std::atomic<int>            m_W_nTubeTempOffset;
-    std::atomic<int>            m_W_nMirorTempOffset;
+    std::atomic<byte>           m_W_nBitsFlag;          // Settings.BitFlags = (byte)(SystemState.BitFlags & -16 | (BlackoutLedCheckbox.Checked ? 2 : 0) | (AutoFanControlCheckbox.Checked ? 4 : 0) | (AutoSynchronizeCheckbox.Checked ? 8 : 0));
+    std::atomic<byte>           m_W_nAirTempOffset;     // int((float value * 10.0) + 128)
+    std::atomic<byte>           m_W_nTubeTempOffset;    // int((float value * 10.0) + 128)
+    std::atomic<byte>           m_W_nMirorTempOffset;   // int((float value * 10.0) + 128)
     std::atomic<byte>           m_W_nDeltaT;
     std::atomic<byte>           m_W_nStillTime;
-    std::atomic<int>            m_W_nImmpp;
-    std::atomic<byte>           m_W_nBackstep;
-    std::atomic<byte>           m_W_nBacklash;
+    std::atomic<word>           m_W_nBackstep;
+    std::atomic<word>           m_W_nBacklash;
+    std::atomic<word>           m_W_nImmpp;
     std::atomic<int>            m_W_nMaxPos;
     std::atomic<int>            m_W_nPreset0;
     std::atomic<int>            m_W_nPreset1;
@@ -204,14 +206,15 @@ protected:
     std::atomic<int>            m_W_nPreset3;
 
     // Takahashi focuser data for 0x11 to device
-    std::atomic<int>            m_W_nMaxPps;
-    std::atomic<int>            m_W_nMinPps;
+    std::atomic<word>           m_W_nMaxPps;
+    std::atomic<word>           m_W_nMinPps;
     std::atomic<byte>           m_W_nTorqueIndex;
     std::atomic<byte>           m_W_nGetbackRate;
     std::atomic<byte>           m_W_nBatteryMaxRate;
-    std::atomic<int>            m_W_nPowerTimer;
-    std::atomic<int>            m_W_nFanTimer;
-    std::atomic<int>            m_W_nOriginOffset;
+    std::atomic<word>           m_W_nPowerTimer;
+    std::atomic<word>           m_W_nFanTimer;
+    std::atomic<word>           m_W_nOriginOffset;
+
 
     CStopWatch      m_cmdTimer;
     CStopWatch      m_gotoTimer;
