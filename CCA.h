@@ -112,6 +112,8 @@ public:
     void        setRestorePosition(int nPosition, bool bRestoreOnConnect);
     
     void        parseResponse(byte *Buffer, int nLength);
+    int         sendSettings();
+    int         sendSettings2();
 
     std::mutex          m_GlobalMutex;
     std::mutex          m_DevAccessMutex;
@@ -120,6 +122,9 @@ protected:
 
     int             Get32(const byte *buffer, int position);
     int             Get16(const byte *buffer, int position);
+
+    void            put32(byte *buffer, int position, int value);
+    void            put16(byte *buffer, int position, int value);
 
     hid_device      *m_DevHandle;
     
@@ -133,7 +138,8 @@ protected:
 
     int             m_nTempSource;
 
-    // Takahashi focuser data for 0x3C
+    // the read thread keep updating these
+    // Takahashi focuser data for 0x3C from device
     std::atomic<int>            m_nCurPos;
     std::atomic<bool>           m_bIsWired;
     std::atomic<bool>           m_bIsAtOrigin;
@@ -152,6 +158,7 @@ protected:
     std::string                 m_sVersion;
     std::atomic<byte>           m_nBackstep;
     std::atomic<byte>           m_nBacklash;
+    std::atomic<int>            m_nImmpp;
     std::atomic<double>         m_dMillimetersPerStep;
     std::atomic<int>            m_nMaxPos;
     std::atomic<int>            m_nPreset0;
@@ -163,7 +170,7 @@ protected:
     std::atomic<float>          m_fMirorTemp;
     std::atomic<int>            m_nBacklashSteps;
     
-    // Takahashi focuser data for 0x11
+    // Takahashi focuser data for 0x11 from device
     std::atomic<int>            m_nMaxPps;
     std::atomic<int>            m_nMinPps;
     std::atomic<byte>           m_nGetbackRate;
@@ -174,7 +181,38 @@ protected:
     std::atomic<bool>           m_bSetFanOn;
     std::atomic<bool>           m_bRestorePosition;
     std::atomic<int>            m_nSavedPosistion;
-    
+    std::atomic<byte>           m_nTorqueIndex;
+
+    // we need these to update the device as the above ones get refreshe constantly by the read thread
+    // these get updated from the settings fialog and writen to the device using sendSettings() and sendSettings2()
+    // Takahashi focuser data for 0x3C to device
+    std::atomic<byte>           m_W_nDriveMode;
+    std::atomic<byte>           m_W_nStepSize;
+    std::atomic<byte>           m_W_nBitsFlag;    // Settings.BitFlags = (byte)(SystemState.BitFlags & -16 | (BlackoutLedCheckbox.Checked ? 2 : 0) | (AutoFanControlCheckbox.Checked ? 4 : 0) | (AutoSynchronizeCheckbox.Checked ? 8 : 0));
+    std::atomic<int>            m_W_nAirTempOffset;
+    std::atomic<int>            m_W_nTubeTempOffset;
+    std::atomic<int>            m_W_nMirorTempOffset;
+    std::atomic<byte>           m_W_nDeltaT;
+    std::atomic<byte>           m_W_nStillTime;
+    std::atomic<int>            m_W_nImmpp;
+    std::atomic<byte>           m_W_nBackstep;
+    std::atomic<byte>           m_W_nBacklash;
+    std::atomic<int>            m_W_nMaxPos;
+    std::atomic<int>            m_W_nPreset0;
+    std::atomic<int>            m_W_nPreset1;
+    std::atomic<int>            m_W_nPreset2;
+    std::atomic<int>            m_W_nPreset3;
+
+    // Takahashi focuser data for 0x11 to device
+    std::atomic<int>            m_W_nMaxPps;
+    std::atomic<int>            m_W_nMinPps;
+    std::atomic<byte>           m_W_nTorqueIndex;
+    std::atomic<byte>           m_W_nGetbackRate;
+    std::atomic<byte>           m_W_nBatteryMaxRate;
+    std::atomic<int>            m_W_nPowerTimer;
+    std::atomic<int>            m_W_nFanTimer;
+    std::atomic<int>            m_W_nOriginOffset;
+
     CStopWatch      m_cmdTimer;
     CStopWatch      m_gotoTimer;
 

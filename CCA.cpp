@@ -502,6 +502,7 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
 
     // locking the mutex to prevent access while we're accessing to the data.
     const std::lock_guard<std::mutex> lock(m_GlobalMutex);
+    int nTmp;
 
 #ifdef PLUGIN_DEBUG
     hexdump(Buffer,  nLength, hexOut);
@@ -527,12 +528,38 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         m_sVersion              = std::to_string(Get16(Buffer, 17)>>8) + "." + std::to_string(Get16(Buffer, 17) & 0xFF);
         m_nBackstep             = Get16(Buffer, 19);
         m_nBacklash             = Get16(Buffer, 21);
+        m_nImmpp                = Get16(Buffer,23);
         m_dMillimetersPerStep   = Get16(Buffer,23) / 1000000.0;
         m_nMaxPos               = Get32(Buffer, 25);
-        m_nPreset0              = Get32(Buffer, 29);
-        m_nPreset1              = Get32(Buffer, 33);
-        m_nPreset2              = Get32(Buffer, 37);
-        m_nPreset3              = Get32(Buffer, 41);
+
+        nTmp                    = Get32(Buffer, 29);
+        if(nTmp<0)
+            nTmp = 0;
+        else if(nTmp > m_nMaxPos)
+            nTmp = m_nMaxPos;
+        m_nPreset0 = nTmp;
+
+        nTmp                    = Get32(Buffer, 33);
+        if(nTmp<0)
+            nTmp = 0;
+        else if(nTmp > m_nMaxPos)
+            nTmp = m_nMaxPos;
+        m_nPreset1 = nTmp;
+
+        nTmp                    = Get32(Buffer, 37);
+        if(nTmp<0)
+            nTmp = 0;
+        else if(nTmp > m_nMaxPos)
+            nTmp = m_nMaxPos;
+        m_nPreset2 = nTmp;
+
+        nTmp                    = Get32(Buffer, 42);
+        if(nTmp<0)
+            nTmp = 0;
+        else if(nTmp > m_nMaxPos)
+            nTmp = m_nMaxPos;
+        m_nPreset3 = nTmp;
+
         m_fAirTemp              = Get32(Buffer, 45) / 10.0;
         m_fTubeTemp             = Get32(Buffer, 49) / 10.0;
         m_fMirorTemp            = Get32(Buffer, 53) / 10.0;
@@ -594,6 +621,108 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
 
 }
 
+int CCCAController::sendSettings()
+{
+    int nErr = PLUGIN_OK;
+    int nByteWriten = 0;
+    byte cHIDBuffer[DATA_BUFFER_SIZE + 1];
+
+    if(!m_bIsConnected)
+        return ERR_COMMNOLINK;
+
+    if(!m_DevHandle)
+        return ERR_COMMNOLINK;
+
+    cHIDBuffer[0] = 0x00; // report ID
+    cHIDBuffer[1] = 38; // size
+    cHIDBuffer[2] = Settings; // command
+    cHIDBuffer[3] = m_W_nDriveMode;
+    cHIDBuffer[4] = m_W_nStepSize;
+    cHIDBuffer[5] = 0; // ??
+    cHIDBuffer[6] = m_W_nBitsFlag;
+    cHIDBuffer[7] = m_W_nAirTempOffset;
+    cHIDBuffer[8] = m_W_nTubeTempOffset;
+    cHIDBuffer[9] = m_W_nMirorTempOffset;
+    cHIDBuffer[10] = m_W_nDeltaT;
+    cHIDBuffer[11] = m_W_nStillTime;
+    put16(cHIDBuffer, 12, m_W_nImmpp);
+    put16(cHIDBuffer, 14, m_W_nBackstep);
+    put16(cHIDBuffer, 16, m_W_nBacklash);
+    put32(cHIDBuffer, 18, m_W_nMaxPos);
+    put32(cHIDBuffer, 22, m_W_nPreset0);
+    put32(cHIDBuffer, 26, m_W_nPreset1);
+    put32(cHIDBuffer, 30, m_W_nPreset2);
+    put32(cHIDBuffer, 34, m_W_nPreset3);
+
+#ifdef PLUGIN_DEBUG
+    hexdump(cHIDBuffer,  REPORT_0_SIZE, hexOut);
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings] sending : " << hexOut << std::endl;
+    m_sLogFile.flush();
+#endif
+
+    if(m_DevAccessMutex.try_lock()) {
+        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_0_SIZE);
+        m_DevAccessMutex.unlock();
+        if(nByteWriten<0)
+            nErr = ERR_CMDFAILED;
+    }
+    else {
+        nErr = ERR_CMDFAILED;
+    }
+#ifdef PLUGIN_DEBUG
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings] nByteWriten : " << nByteWriten << std::endl;
+    m_sLogFile.flush();
+#endif
+
+    return nErr;
+}
+
+int CCCAController::sendSettings2()
+{
+    int nErr = PLUGIN_OK;
+    int nByteWriten = 0;
+    byte cHIDBuffer[DATA_BUFFER_SIZE + 1];
+
+    if(!m_bIsConnected)
+        return ERR_COMMNOLINK;
+
+    if(!m_DevHandle)
+        return ERR_COMMNOLINK;
+
+    cHIDBuffer[0] = 0x00; // report ID
+    cHIDBuffer[1] = 19; // size
+    cHIDBuffer[2] = Settings2; // command
+    put16(cHIDBuffer, 3, m_W_nMaxPps);
+    put16(cHIDBuffer, 5, m_W_nMinPps);
+    cHIDBuffer[7] = m_W_nTorqueIndex;
+    cHIDBuffer[8] = m_W_nGetbackRate;
+    cHIDBuffer[9] = m_W_nBatteryMaxRate;
+    put16(cHIDBuffer, 11, m_W_nPowerTimer);
+    put16(cHIDBuffer, 13, m_W_nFanTimer);
+    put32(cHIDBuffer, 15, m_W_nOriginOffset);
+
+#ifdef PLUGIN_DEBUG
+    hexdump(cHIDBuffer,  REPORT_0_SIZE, hexOut);
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings2] sending : " << hexOut << std::endl;
+    m_sLogFile.flush();
+#endif
+
+    if(m_DevAccessMutex.try_lock()) {
+        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_0_SIZE);
+        m_DevAccessMutex.unlock();
+        if(nByteWriten<0)
+            nErr = ERR_CMDFAILED;
+    }
+    else {
+        nErr = ERR_CMDFAILED;
+    }
+#ifdef PLUGIN_DEBUG
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings2] nByteWriten : " << nByteWriten << std::endl;
+    m_sLogFile.flush();
+#endif
+
+    return nErr;
+}
 int CCCAController::Get32(const byte *buffer, int position)
 {
 
@@ -611,6 +740,21 @@ int CCCAController::Get16(const byte *buffer, int position)
     return buffer[position] << 8 | buffer[position + 1];
 
 }
+
+void CCCAController::put32(byte *buffer, int position, int value)
+{
+    buffer[position    ] = (byte)((value>>24)  & 0xff);
+    buffer[position + 1] = (byte)((value>>16)  & 0xff);
+    buffer[position + 2] = (byte)((value>>8)  & 0xff);
+    buffer[position + 3] = (byte)(value & 0xff);
+}
+
+void CCCAController::put16(byte *buffer, int position, int value)
+{
+    buffer[position    ] = (byte)((value>>8)  & 0xff);
+    buffer[position + 1] = (byte)(value & 0xff);
+}
+
 
 #ifdef PLUGIN_DEBUG
 void  CCCAController::hexdump(const byte *inputData, int inputSize,  std::string &outHex)
