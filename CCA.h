@@ -77,7 +77,52 @@ typedef enum {
     Dummy = 0xFF
 } Commands;
 
+typedef struct cca_setting {
+    std::atomic<int>            nCurPos;
+    std::atomic<bool>           bIsWired;
+    std::atomic<bool>           bIsAtOrigin;
+    std::atomic<bool>           bIsMoving;
+    std::atomic<bool>           bFanIsOn;
+    std::atomic<bool>           bIsBatteryOperated;
+    std::atomic<bool>           bIsHold;
+    std::atomic<byte>           nDriveMode;
+    std::atomic<byte>           nStepSize;
+    std::atomic<byte>           nBitsFlag;    // Settings.BitFlags = (byte)(SystemState.BitFlags & -16 | (BlackoutLedCheckbox.Checked ? 2 : 0) | (AutoFanControlCheckbox.Checked ? 4 : 0) | (AutoSynchronizeCheckbox.Checked ? 8 : 0));
+    std::atomic<byte>           nAirTempOffset;   // (value -128)/10.0
+    std::atomic<byte>           nTubeTempOffset;  // (value -128)/10.0
+    std::atomic<byte>           nMirorTempOffset; // (value -128)/10.0
+    std::atomic<byte>           nDeltaT;
+    std::atomic<byte>           nStillTime;
+    std::string                 sVersion;
+    std::atomic<word>           nBackstep;
+    std::atomic<word>           nBacklash;
+    std::atomic<word>           nImmpp;
+    std::atomic<double>         dMillimetersPerStep;
+    std::atomic<int>            nMaxPos;
+    std::atomic<int>            nPreset0;
+    std::atomic<int>            nPreset1;
+    std::atomic<int>            nPreset2;
+    std::atomic<int>            nPreset3;
+    std::atomic<float>          fAirTemp;
+    std::atomic<float>          fTubeTemp;
+    std::atomic<float>          fMirorTemp;
+    std::atomic<int>            nBacklashSteps;
+} CCA_Settings;
 
+typedef struct cca_adv_settings {
+    std::atomic<word>           nMaxPps;
+    std::atomic<word>           nMinPps;
+    std::atomic<byte>           nGetbackRate;
+    std::atomic<byte>           nBatteryMaxRate;
+    std::atomic<word>           nPowerTimer;
+    std::atomic<word>           nFanTimer;
+    std::atomic<word>           nOriginOffset;
+    std::atomic<bool>           bSetFanOn;
+    std::atomic<bool>           bRestorePosition;
+    std::atomic<int>            nSavedPosistion;
+    std::atomic<byte>           nTorqueIndex;
+
+} CCA_Adv_Settings;
 
 class CCCAController
 {
@@ -98,7 +143,7 @@ public:
     int         isGoToComplete(bool &bComplete);
 
     // getter and setter
-    int         getFirmwareVersion(char *pszVersion, int nStrMaxLen);
+    int         getFirmwareVersion(std::string &sFirmware);
     double      getTemperature();
     double      getTemperature(int nSource);
     int         getPosition(void);
@@ -142,79 +187,18 @@ protected:
 
     // the read thread keep updating these
     // Takahashi focuser data for 0x3C from device
-    std::atomic<int>            m_nCurPos;
-    std::atomic<bool>           m_bIsWired;
-    std::atomic<bool>           m_bIsAtOrigin;
-    std::atomic<bool>           m_bIsMoving;
-    std::atomic<bool>           m_bFanIsOn;
-    std::atomic<bool>           m_bIsBatteryOperated;
-    std::atomic<bool>           m_bIsHold;
-    std::atomic<byte>           m_nDriveMode;
-    std::atomic<byte>           m_nStepSize;
-    std::atomic<byte>           m_nBitsFlag;    // Settings.BitFlags = (byte)(SystemState.BitFlags & -16 | (BlackoutLedCheckbox.Checked ? 2 : 0) | (AutoFanControlCheckbox.Checked ? 4 : 0) | (AutoSynchronizeCheckbox.Checked ? 8 : 0));
-    std::atomic<byte>           m_nAirTempOffset;   // (value -128)/10.0
-    std::atomic<byte>           m_nTubeTempOffset;  // (value -128)/10.0
-    std::atomic<byte>           m_nMirorTempOffset; // (value -128)/10.0
-    std::atomic<byte>           m_nDeltaT;
-    std::atomic<byte>           m_nStillTime;
-    std::string                 m_sVersion;
-    std::atomic<word>           m_nBackstep;
-    std::atomic<word>           m_nBacklash;
-    std::atomic<word>           m_nImmpp;
-    std::atomic<double>         m_dMillimetersPerStep;
-    std::atomic<int>            m_nMaxPos;
-    std::atomic<int>            m_nPreset0;
-    std::atomic<int>            m_nPreset1;
-    std::atomic<int>            m_nPreset2;
-    std::atomic<int>            m_nPreset3;
-    std::atomic<float>          m_fAirTemp;
-    std::atomic<float>          m_fTubeTemp;
-    std::atomic<float>          m_fMirorTemp;
-    std::atomic<int>            m_nBacklashSteps;
-    
+    CCA_Settings        m_CCA_Settings;
+
     // Takahashi focuser data for 0x11 from device
-    std::atomic<word>           m_nMaxPps;
-    std::atomic<word>           m_nMinPps;
-    std::atomic<byte>           m_nGetbackRate;
-    std::atomic<byte>           m_nBatteryMaxRate;
-    std::atomic<word>           m_nPowerTimer;
-    std::atomic<word>           m_nFanTimer;
-    std::atomic<word>           m_nOriginOffset;
-    std::atomic<bool>           m_bSetFanOn;
-    std::atomic<bool>           m_bRestorePosition;
-    std::atomic<int>            m_nSavedPosistion;
-    std::atomic<byte>           m_nTorqueIndex;
+    CCA_Adv_Settings    m_CCA_Adv_Settings;
 
     // we need these to update the device as the above ones get refreshe constantly by the read thread
     // these get updated from the settings fialog and writen to the device using sendSettings() and sendSettings2()
     // Takahashi focuser data for 0x3C to device
-    std::atomic<byte>           m_W_nDriveMode;
-    std::atomic<byte>           m_W_nStepSize;
-    std::atomic<byte>           m_W_nBitsFlag;          // Settings.BitFlags = (byte)(SystemState.BitFlags & -16 | (BlackoutLedCheckbox.Checked ? 2 : 0) | (AutoFanControlCheckbox.Checked ? 4 : 0) | (AutoSynchronizeCheckbox.Checked ? 8 : 0));
-    std::atomic<byte>           m_W_nAirTempOffset;     // int((float value * 10.0) + 128)
-    std::atomic<byte>           m_W_nTubeTempOffset;    // int((float value * 10.0) + 128)
-    std::atomic<byte>           m_W_nMirorTempOffset;   // int((float value * 10.0) + 128)
-    std::atomic<byte>           m_W_nDeltaT;
-    std::atomic<byte>           m_W_nStillTime;
-    std::atomic<word>           m_W_nBackstep;
-    std::atomic<word>           m_W_nBacklash;
-    std::atomic<word>           m_W_nImmpp;
-    std::atomic<int>            m_W_nMaxPos;
-    std::atomic<int>            m_W_nPreset0;
-    std::atomic<int>            m_W_nPreset1;
-    std::atomic<int>            m_W_nPreset2;
-    std::atomic<int>            m_W_nPreset3;
+    CCA_Settings        m_W_CCA_Settings;
 
     // Takahashi focuser data for 0x11 to device
-    std::atomic<word>           m_W_nMaxPps;
-    std::atomic<word>           m_W_nMinPps;
-    std::atomic<byte>           m_W_nTorqueIndex;
-    std::atomic<byte>           m_W_nGetbackRate;
-    std::atomic<byte>           m_W_nBatteryMaxRate;
-    std::atomic<word>           m_W_nPowerTimer;
-    std::atomic<word>           m_W_nFanTimer;
-    std::atomic<word>           m_W_nOriginOffset;
-
+    CCA_Adv_Settings    m_W_CCA_Adv_Settings;
 
     CStopWatch      m_cmdTimer;
     CStopWatch      m_gotoTimer;

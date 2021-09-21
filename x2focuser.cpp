@@ -107,9 +107,10 @@ void X2Focuser::deviceInfoFirmwareVersion(BasicStringInterface& str)
     else {
         X2MutexLocker ml(GetMutex());
         // get firmware version
+        std::string sFirmware;
         char cFirmware[DATA_BUFFER_SIZE];
-        m_CCAController.getFirmwareVersion(cFirmware, DATA_BUFFER_SIZE);
-        str = cFirmware;
+        m_CCAController.getFirmwareVersion(sFirmware);
+        str = sFirmware.c_str();
     }
 }
 
