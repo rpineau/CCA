@@ -228,7 +228,7 @@ int CCCAController::haltFocuser()
 {
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
-    byte cHIDBuffer[DATA_BUFFER_SIZE + 1];
+    byte cHIDBuffer[DATA_BUFFER_SIZE];
 
     if(!m_bIsConnected)
         return ERR_COMMNOLINK;
@@ -236,6 +236,7 @@ int CCCAController::haltFocuser()
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
 
+    memset(cHIDBuffer, 0, DATA_BUFFER_SIZE);
     if(m_CCA_Settings.bIsMoving) {
         cHIDBuffer[0] = 0x00; // report ID
         cHIDBuffer[1] = 0x01; // command length
@@ -263,7 +264,7 @@ int CCCAController::gotoPosition(int nPos)
 {
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
-    byte cHIDBuffer[DATA_BUFFER_SIZE + 1];
+    byte cHIDBuffer[DATA_BUFFER_SIZE];
 
     if(!m_bIsConnected)
 		return ERR_COMMNOLINK;
@@ -274,6 +275,7 @@ int CCCAController::gotoPosition(int nPos)
     if (nPos>m_CCA_Settings.nMaxPos)
         return ERR_LIMITSEXCEEDED;
 
+    memset(cHIDBuffer, 0, DATA_BUFFER_SIZE);
     if(m_CCA_Settings.bIsHold && !m_CCA_Settings.bIsMoving) {
     #ifdef PLUGIN_DEBUG
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] goto :  " << std::dec << nPos << " (0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << nPos <<")" << std::dec << std::endl;
@@ -447,7 +449,7 @@ int CCCAController::setFanOn(bool bOn)
 {
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
-    byte cHIDBuffer[DATA_BUFFER_SIZE + 1];
+    byte cHIDBuffer[DATA_BUFFER_SIZE];
 
     
     m_W_CCA_Adv_Settings.bSetFanOn = bOn;
@@ -457,6 +459,8 @@ int CCCAController::setFanOn(bool bOn)
     }
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
+
+    memset(cHIDBuffer, 0, DATA_BUFFER_SIZE);
 
     cHIDBuffer[0] = 0x00; // report ID
     cHIDBuffer[1] = 0x01; // command length
@@ -645,7 +649,7 @@ int CCCAController::sendSettings()
 {
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
-    byte cHIDBuffer[DATA_BUFFER_SIZE + 1];
+    byte cHIDBuffer[DATA_BUFFER_SIZE];
 
     if(!m_bIsConnected)
         return ERR_COMMNOLINK;
@@ -653,8 +657,10 @@ int CCCAController::sendSettings()
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
 
+    memset(cHIDBuffer, 0, DATA_BUFFER_SIZE);
+
     cHIDBuffer[0] = 0x00; // report ID
-    cHIDBuffer[1] = 38; // size
+    cHIDBuffer[1] = 36; // size = 1+1+1+1+1+1+1+1+1+1+2+2+2+4+4+4+4+4
     cHIDBuffer[2] = Settings; // command
     cHIDBuffer[3] = 4; // m_W_nDriveMode;
     cHIDBuffer[4] = m_W_CCA_Settings.nStepSize;
@@ -681,7 +687,7 @@ int CCCAController::sendSettings()
 #endif
 
     if(m_DevAccessMutex.try_lock()) {
-        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_0_SIZE);
+        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_0_SETTINGS_SIZE);
         m_DevAccessMutex.unlock();
         if(nByteWriten<0)
             nErr = ERR_CMDFAILED;
@@ -701,7 +707,7 @@ int CCCAController::sendSettings2()
 {
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
-    byte cHIDBuffer[DATA_BUFFER_SIZE + 1];
+    byte cHIDBuffer[DATA_BUFFER_SIZE];
 
     if(!m_bIsConnected)
         return ERR_COMMNOLINK;
@@ -709,8 +715,10 @@ int CCCAController::sendSettings2()
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
 
+    memset(cHIDBuffer, 0, DATA_BUFFER_SIZE);
+
     cHIDBuffer[0] = 0x00; // report ID
-    cHIDBuffer[1] = 19; // size
+    cHIDBuffer[1] = 16; // size = 1+2+2+1+1+1+2+2+4
     cHIDBuffer[2] = Settings2; // command
     put16(cHIDBuffer, 3, m_W_CCA_Adv_Settings.nMaxPps);
     put16(cHIDBuffer, 5, m_W_CCA_Adv_Settings.nMinPps);
@@ -728,7 +736,7 @@ int CCCAController::sendSettings2()
 #endif
 
     if(m_DevAccessMutex.try_lock()) {
-        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_0_SIZE);
+        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_0_SETTINGS2_SIZE);
         m_DevAccessMutex.unlock();
         if(nByteWriten<0)
             nErr = ERR_CMDFAILED;

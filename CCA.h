@@ -9,6 +9,8 @@
 #ifndef __CCA__
 #define __CCA__
 
+#include <string.h>
+
 #ifdef SB_MAC_BUILD
 #include <unistd.h>
 #endif
@@ -33,13 +35,15 @@
 
 #define PLUGIN_VERSION      1.1
 
-#define PLUGIN_DEBUG 3
+// #define PLUGIN_DEBUG 3
 
 #define DATA_BUFFER_SIZE    64
 #define MAX_TIMEOUT         1000
 #define LOG_BUFFER_SIZE     256
 #define REPORT_0_SIZE   8
 #define REPORT_1_SIZE   3
+#define REPORT_0_SETTINGS_SIZE  38
+#define REPORT_0_SETTINGS2_SIZE 38
 
 #define LOCAL_DEBUG
 #ifndef LOCAL_DEBUG
