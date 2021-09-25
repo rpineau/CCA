@@ -585,9 +585,9 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
             nTmp = m_CCA_Settings.nMaxPos;
         m_CCA_Settings.nPreset3 = nTmp;
 
-        m_CCA_Settings.fAirTemp              = Get32(Buffer, 45) / 10.0;
-        m_CCA_Settings.fTubeTemp             = Get32(Buffer, 49) / 10.0;
-        m_CCA_Settings.fMirorTemp            = Get32(Buffer, 53) / 10.0;
+        m_CCA_Settings.fAirTemp              = float(Get32(Buffer, 45)) / 10.0;
+        m_CCA_Settings.fTubeTemp             = float(Get32(Buffer, 49)) / 10.0;
+        m_CCA_Settings.fMirorTemp            = float(Get32(Buffer, 53)) / 10.0;
         m_CCA_Settings.nBacklashSteps        = Get32(Buffer, 57);
          
 #ifdef PLUGIN_DEBUG
