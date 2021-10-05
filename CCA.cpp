@@ -257,6 +257,7 @@ int CCCAController::haltFocuser()
             nErr = ERR_CMDFAILED;
         }
     }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
     return nErr;
 }
 
@@ -288,8 +289,8 @@ int CCCAController::gotoPosition(int nPos)
         cHIDBuffer[4] = byte((nPos &0x00FF000) >> 16);
         cHIDBuffer[5] = byte((nPos &0x0000FF00) >> 8);
         cHIDBuffer[6] = byte(nPos &0x000000FF);
-        cHIDBuffer[7] = 0x00;
-        
+        // the rest of the buffer contains all zero because of the memset above
+
     #ifdef PLUGIN_DEBUG
         hexdump(cHIDBuffer,  REPORT_0_SIZE, hexOut);
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] sending : " << hexOut << std::endl;
@@ -310,6 +311,7 @@ int CCCAController::gotoPosition(int nPos)
         m_sLogFile.flush();
     #endif
     }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
     m_gotoTimer.Reset();
     return nErr;
 }
@@ -345,7 +347,7 @@ int CCCAController::isGoToComplete(bool &bComplete)
 
     bComplete = false;
 
-    if(m_gotoTimer.GetElapsedSeconds()<1.0) { // focuser take a bit of time to start moving and reporting it's moving.
+    if(m_gotoTimer.GetElapsedSeconds()<1.5) { // focuser take a bit of time to start moving and reporting it's moving.
         return nErr;
     }
     
@@ -449,8 +451,11 @@ int CCCAController::setFanOn(bool bOn)
 {
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
-    byte cHIDBuffer[DATA_BUFFER_SIZE];
+    int i=0;
+    int nbRead;
 
+    byte cHIDBuffer[DATA_BUFFER_SIZE];
+    byte cHIDBufferIn[DATA_BUFFER_SIZE];
     
     m_W_CCA_Adv_Settings.bSetFanOn = bOn;
 
@@ -468,21 +473,36 @@ int CCCAController::setFanOn(bool bOn)
         cHIDBuffer[2] = FanOn; // command
     else
         cHIDBuffer[2] = FanOff; // command
+    // the rest of the buffer contains all zero because of the memset above
 
+    // the Takahashi ASCOM drvier 1.1.2 seems to send the command 3 times..
+    for(i=0; i<3; i++) {
 #ifdef PLUGIN_DEBUG
-    hexdump(cHIDBuffer,  REPORT_1_SIZE, hexOut);
-    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] sending : " << hexOut << std::endl;
-    m_sLogFile.flush();
+        hexdump(cHIDBuffer,  REPORT_1_SIZE, hexOut);
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] " << i << " sending : " << hexOut << std::endl;
+        m_sLogFile.flush();
 #endif
-    if(m_DevAccessMutex.try_lock()) {
-        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
-        m_DevAccessMutex.unlock();
-        if(nByteWriten<0) {
-            nErr = ERR_CMDFAILED;
+        if(m_DevAccessMutex.try_lock()) {
+            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
+            m_DevAccessMutex.unlock();
+            if(nByteWriten<0) {
+#ifdef PLUGIN_DEBUG
+                m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] nByteWriten : " << nByteWriten << std::endl;
+                m_sLogFile.flush();
+#endif
+                return ERR_CMDFAILED;
+            }
         }
+        else {
+#ifdef PLUGIN_DEBUG
+            m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] Couldn't lock device" << std::endl;
+            m_sLogFile.flush();
+#endif
+            return ERR_CMDFAILED;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
     }
-    else
-        nErr = ERR_CMDFAILED;
+
     return nErr;
 }
 
@@ -699,7 +719,7 @@ int CCCAController::sendSettings()
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings] nByteWriten : " << nByteWriten << std::endl;
     m_sLogFile.flush();
 #endif
-
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
     return nErr;
 }
 
@@ -748,7 +768,7 @@ int CCCAController::sendSettings2()
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings2] nByteWriten : " << nByteWriten << std::endl;
     m_sLogFile.flush();
 #endif
-
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
     return nErr;
 }
 
@@ -829,6 +849,8 @@ void  CCCAController::hexdump(const byte *inputData, int inputSize,  std::string
 
     outHex.clear();
     for(idx=0; idx<inputSize; idx++){
+        if((idx%16) == 0 && idx>0)
+            ssTmp << std::endl;
         ssTmp << "0x" << std::uppercase << std::setfill('0') << std::setw(2) << std::hex << (int)inputData[idx] <<" ";
     }
     outHex.assign(ssTmp.str());

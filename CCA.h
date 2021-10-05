@@ -41,19 +41,12 @@
 #define MAX_TIMEOUT         1000
 #define LOG_BUFFER_SIZE     256
 #define REPORT_0_SIZE   8
-#define REPORT_1_SIZE   3
+#define REPORT_1_SIZE   4
 #define REPORT_0_SETTINGS_SIZE  38
 #define REPORT_0_SETTINGS2_SIZE 38
 
-// #define LOCAL_DEBUG
-#ifndef LOCAL_DEBUG
 #define VENDOR_ID   0x20E1
 #define PRODUCT_ID  0x0002
-#else
-// just to test HID stuff with my only HID device that is not a keyboard or a mouse
-#define VENDOR_ID 0x2341    // Arduino
-#define PRODUCT_ID 0x8036   // Leonardo
-#endif
 
 enum CCA_Errors    {PLUGIN_OK = 0, NOT_CONNECTED, CCA_CANT_CONNECT, CCA_BAD_CMD_RESPONSE, COMMAND_FAILED};
 enum MotorDir       {NORMAL = 0 , REVERSE};

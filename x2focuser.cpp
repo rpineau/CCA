@@ -108,7 +108,6 @@ void X2Focuser::deviceInfoFirmwareVersion(BasicStringInterface& str)
         X2MutexLocker ml(GetMutex());
         // get firmware version
         std::string sFirmware;
-        char cFirmware[DATA_BUFFER_SIZE];
         m_CCAController.getFirmwareVersion(sFirmware);
         str = sFirmware.c_str();
     }
@@ -246,6 +245,7 @@ int	X2Focuser::execModalSettingsDialog(void)
 void X2Focuser::uiEvent(X2GUIExchangeInterface* uiex, const char* pszEvent)
 {
     std::stringstream sTmpBuf;
+    bool bTmp;
 
     if (!strcmp(pszEvent, "on_timer")) {
         if(m_bLinked) {
@@ -259,6 +259,11 @@ void X2Focuser::uiEvent(X2GUIExchangeInterface* uiex, const char* pszEvent)
             std::stringstream().swap(sTmpBuf);
             sTmpBuf << std::fixed << std::setprecision(2) << m_CCAController.getTemperature(MIRROR) << "ºC";
             uiex->setText("mirrorTemp", sTmpBuf.str().c_str());
+            bTmp = m_CCAController.getFanState();
+            if(bTmp)
+                uiex->setChecked("radioButton", 1);
+            else
+                uiex->setChecked("radioButton_2", 1);
         }
     }
     
