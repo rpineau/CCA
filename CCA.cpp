@@ -9,7 +9,7 @@
 
 void threaded_sender(std::future<void> futureObj, CCCAController *CCAControllerObj, hid_device *hidDevice)
 {
-    const byte cmdData[3] = {0x00, 0x01, Dummy};
+    const byte cmdData[REPORT_SIZE] = {0x00, 0x01, Dummy, 0x00};
 
     while (futureObj.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout) {
         if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
@@ -25,7 +25,7 @@ void threaded_sender(std::future<void> futureObj, CCCAController *CCAControllerO
 void threaded_poller(std::future<void> futureObj, CCCAController *CCAControllerObj, hid_device *hidDevice)
 {
     int nbRead;
-    byte cHIDBuffer[DATA_BUFFER_SIZE];
+    byte cHIDBuffer[REPORT_SIZE];
 
     while (futureObj.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
         if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
@@ -228,7 +228,7 @@ int CCCAController::haltFocuser()
 {
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
-    byte cHIDBuffer[DATA_BUFFER_SIZE];
+    byte cHIDBuffer[REPORT_SIZE];
 
     if(!m_bIsConnected)
         return ERR_COMMNOLINK;
@@ -236,19 +236,19 @@ int CCCAController::haltFocuser()
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
 
-    memset(cHIDBuffer, 0, DATA_BUFFER_SIZE);
+    memset(cHIDBuffer, 0, REPORT_SIZE);
     if(m_CCA_Settings.bIsMoving) {
         cHIDBuffer[0] = 0x00; // report ID
         cHIDBuffer[1] = 0x01; // command length
         cHIDBuffer[2] = Stop; // command
 
     #ifdef PLUGIN_DEBUG
-        hexdump(cHIDBuffer,  REPORT_1_SIZE, hexOut);
+        hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [haltFocuser] sending : " << hexOut << std::endl;
         m_sLogFile.flush();
     #endif
         if(m_DevAccessMutex.try_lock()) {
-            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
+            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
             m_DevAccessMutex.unlock();
             if(nByteWriten<0)
                 nErr = ERR_CMDFAILED;
@@ -265,7 +265,7 @@ int CCCAController::gotoPosition(int nPos)
 {
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
-    byte cHIDBuffer[DATA_BUFFER_SIZE];
+    byte cHIDBuffer[REPORT_SIZE];
 
     if(!m_bIsConnected)
 		return ERR_COMMNOLINK;
@@ -276,7 +276,7 @@ int CCCAController::gotoPosition(int nPos)
     if (nPos>m_CCA_Settings.nMaxPos)
         return ERR_LIMITSEXCEEDED;
 
-    memset(cHIDBuffer, 0, DATA_BUFFER_SIZE);
+    memset(cHIDBuffer, 0, REPORT_SIZE);
     if(m_CCA_Settings.bIsHold && !m_CCA_Settings.bIsMoving) {
     #ifdef PLUGIN_DEBUG
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] goto :  " << std::dec << nPos << " (0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << nPos <<")" << std::dec << std::endl;
@@ -292,13 +292,13 @@ int CCCAController::gotoPosition(int nPos)
         // the rest of the buffer contains all zero because of the memset above
 
     #ifdef PLUGIN_DEBUG
-        hexdump(cHIDBuffer,  REPORT_0_SIZE, hexOut);
+        hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] sending : " << hexOut << std::endl;
         m_sLogFile.flush();
     #endif
 
         if(m_DevAccessMutex.try_lock()) {
-            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_0_SIZE);
+            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
             m_DevAccessMutex.unlock();
             if(nByteWriten<0)
                 nErr = ERR_CMDFAILED;
@@ -452,11 +452,8 @@ int CCCAController::setFanOn(bool bOn)
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
     int i=0;
-    int nbRead;
+    byte cHIDBuffer[REPORT_SIZE];
 
-    byte cHIDBuffer[DATA_BUFFER_SIZE];
-    byte cHIDBufferIn[DATA_BUFFER_SIZE];
-    
     m_W_CCA_Adv_Settings.bSetFanOn = bOn;
 
     if(!m_bIsConnected) {
@@ -465,7 +462,7 @@ int CCCAController::setFanOn(bool bOn)
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
 
-    memset(cHIDBuffer, 0, DATA_BUFFER_SIZE);
+    memset(cHIDBuffer, 0, REPORT_SIZE);
 
     cHIDBuffer[0] = 0x00; // report ID
     cHIDBuffer[1] = 0x01; // command length
@@ -475,15 +472,18 @@ int CCCAController::setFanOn(bool bOn)
         cHIDBuffer[2] = FanOff; // command
     // the rest of the buffer contains all zero because of the memset above
 
+    //
     // the Takahashi ASCOM drvier 1.1.2 seems to send the command 3 times..
+    // this needs to be confirmed with a proper JHID communication dum between the driver and a real CCA.
+    //
     for(i=0; i<3; i++) {
 #ifdef PLUGIN_DEBUG
-        hexdump(cHIDBuffer,  REPORT_1_SIZE, hexOut);
+        hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] " << i << " sending : " << hexOut << std::endl;
         m_sLogFile.flush();
 #endif
         if(m_DevAccessMutex.try_lock()) {
-            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_1_SIZE);
+            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
             m_DevAccessMutex.unlock();
             if(nByteWriten<0) {
 #ifdef PLUGIN_DEBUG
@@ -669,7 +669,7 @@ int CCCAController::sendSettings()
 {
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
-    byte cHIDBuffer[DATA_BUFFER_SIZE];
+    byte cHIDBuffer[REPORT_SIZE];
 
     if(!m_bIsConnected)
         return ERR_COMMNOLINK;
@@ -677,7 +677,7 @@ int CCCAController::sendSettings()
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
 
-    memset(cHIDBuffer, 0, DATA_BUFFER_SIZE);
+    memset(cHIDBuffer, 0, REPORT_SIZE);
 
     cHIDBuffer[0] = 0x00; // report ID
     cHIDBuffer[1] = 36; // size = 1+1+1+1+1+1+1+1+1+1+2+2+2+4+4+4+4+4
@@ -701,13 +701,13 @@ int CCCAController::sendSettings()
     put32(cHIDBuffer, 34, m_W_CCA_Settings.nPreset3);
 
 #ifdef PLUGIN_DEBUG
-    hexdump(cHIDBuffer,  REPORT_0_SIZE, hexOut);
+    hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings] sending : " << hexOut << std::endl;
     m_sLogFile.flush();
 #endif
 
     if(m_DevAccessMutex.try_lock()) {
-        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_0_SETTINGS_SIZE);
+        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
         m_DevAccessMutex.unlock();
         if(nByteWriten<0)
             nErr = ERR_CMDFAILED;
@@ -727,7 +727,7 @@ int CCCAController::sendSettings2()
 {
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
-    byte cHIDBuffer[DATA_BUFFER_SIZE];
+    byte cHIDBuffer[REPORT_SIZE];
 
     if(!m_bIsConnected)
         return ERR_COMMNOLINK;
@@ -735,7 +735,7 @@ int CCCAController::sendSettings2()
     if(!m_DevHandle)
         return ERR_COMMNOLINK;
 
-    memset(cHIDBuffer, 0, DATA_BUFFER_SIZE);
+    memset(cHIDBuffer, 0, REPORT_SIZE);
 
     cHIDBuffer[0] = 0x00; // report ID
     cHIDBuffer[1] = 16; // size = 1+2+2+1+1+1+2+2+4
@@ -750,13 +750,13 @@ int CCCAController::sendSettings2()
     put32(cHIDBuffer, 15, m_W_CCA_Adv_Settings.nOriginOffset);
 
 #ifdef PLUGIN_DEBUG
-    hexdump(cHIDBuffer,  REPORT_0_SIZE, hexOut);
+    hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings2] sending : " << hexOut << std::endl;
     m_sLogFile.flush();
 #endif
 
     if(m_DevAccessMutex.try_lock()) {
-        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_0_SETTINGS2_SIZE);
+        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
         m_DevAccessMutex.unlock();
         if(nByteWriten<0)
             nErr = ERR_CMDFAILED;

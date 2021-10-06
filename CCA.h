@@ -37,13 +37,8 @@
 
 #define PLUGIN_DEBUG 3
 
-#define DATA_BUFFER_SIZE    64
 #define MAX_TIMEOUT         1000
-#define LOG_BUFFER_SIZE     256
-#define REPORT_0_SIZE   8
-#define REPORT_1_SIZE   4
-#define REPORT_0_SETTINGS_SIZE  38
-#define REPORT_0_SETTINGS2_SIZE 38
+#define REPORT_SIZE         65 // 64 byte buffer + report ID
 
 #define VENDOR_ID   0x20E1
 #define PRODUCT_ID  0x0002
@@ -174,8 +169,7 @@ protected:
     
     bool            m_bDebugLog;
     bool            m_bIsConnected;
-    char            m_szFirmwareVersion[DATA_BUFFER_SIZE];
-    char            m_szLogBuffer[LOG_BUFFER_SIZE];
+    char            m_szFirmwareVersion[64];
 
     int             m_nTargetPos;
     bool            m_bPosLimitEnabled;
