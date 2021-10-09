@@ -11,7 +11,7 @@ void threaded_sender(std::future<void> futureObj, CCCAController *CCAControllerO
 {
     const byte cmdData[REPORT_SIZE] = {0x00, 0x01, Dummy, 0x00};
 
-    while (futureObj.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout) {
+    while (futureObj.wait_for(std::chrono::milliseconds(750)) == std::future_status::timeout) {
         if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
             hid_write(hidDevice, cmdData, sizeof(cmdData));
             CCAControllerObj->m_DevAccessMutex.unlock();
@@ -89,7 +89,8 @@ CCCAController::CCCAController()
     m_cmdTimer.Reset();
     
     m_ThreadsAreRunning = false;
-    
+    m_nGotoTries = 0;
+
 #ifdef PLUGIN_DEBUG
 #if defined(SB_WIN_BUILD)
     m_sLogfilePath = getenv("HOMEDRIVE");
@@ -229,6 +230,7 @@ int CCCAController::haltFocuser()
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
     byte cHIDBuffer[REPORT_SIZE];
+    int nNbTimeOut = 0;
 
     if(!m_bIsConnected)
         return ERR_COMMNOLINK;
@@ -244,19 +246,34 @@ int CCCAController::haltFocuser()
 
     #ifdef PLUGIN_DEBUG
         hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [haltFocuser] sending : " << hexOut << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [haltFocuser] sending : " << std::endl << hexOut << std::endl;
         m_sLogFile.flush();
     #endif
-        if(m_DevAccessMutex.try_lock()) {
-            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
-            m_DevAccessMutex.unlock();
-            if(nByteWriten<0)
-                nErr = ERR_CMDFAILED;
-        }
-        else {
-            nErr = ERR_CMDFAILED;
+        nNbTimeOut = 0;
+        while(nNbTimeOut < 3) {
+            if(m_DevAccessMutex.try_lock()) {
+                nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
+                m_DevAccessMutex.unlock();
+                if(nByteWriten<0) {
+                    nNbTimeOut++;
+                    std::this_thread::yield();
+                }
+                else {
+                    break; // all good, no need to retry
+                }
+            }
+            else {
+                nNbTimeOut++;
+                std::this_thread::yield();
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread in case we got an error
         }
     }
+
+    if(nNbTimeOut>=3)
+        nErr = ERR_CMDFAILED;
+    m_nGotoTries = MAX_GOTO_RETRY+1; // prevent goto retries
+
     std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
     return nErr;
 }
@@ -266,6 +283,7 @@ int CCCAController::gotoPosition(int nPos)
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
     byte cHIDBuffer[REPORT_SIZE];
+    int nNbTimeOut = 0;
 
     if(!m_bIsConnected)
 		return ERR_COMMNOLINK;
@@ -293,24 +311,39 @@ int CCCAController::gotoPosition(int nPos)
 
     #ifdef PLUGIN_DEBUG
         hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] sending : " << hexOut << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] sending : " << std::endl << hexOut << std::endl;
         m_sLogFile.flush();
     #endif
 
-        if(m_DevAccessMutex.try_lock()) {
-            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
-            m_DevAccessMutex.unlock();
-            if(nByteWriten<0)
-                nErr = ERR_CMDFAILED;
+        nNbTimeOut = 0;
+        while(nNbTimeOut < 3) {
+            if(m_DevAccessMutex.try_lock()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100)); // make sure nothing else is going on.
+                nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
+                m_DevAccessMutex.unlock();
+                if(nByteWriten<0) {
+                    nNbTimeOut++;
+                    std::this_thread::yield();
+                }
+                else {
+                    break; // all good, no need to retry
+                }
+            }
+            else {
+                nNbTimeOut++;
+                std::this_thread::yield();
+            }
         }
-        else {
-            nErr = ERR_CMDFAILED;
-        }
+
     #ifdef PLUGIN_DEBUG
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] nByteWriten : " << nByteWriten << std::endl;
         m_sLogFile.flush();
     #endif
     }
+
+    if(nNbTimeOut>=3)
+        nErr = ERR_CMDFAILED;
+
     std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
     m_gotoTimer.Reset();
     return nErr;
@@ -347,7 +380,7 @@ int CCCAController::isGoToComplete(bool &bComplete)
 
     bComplete = false;
 
-    if(m_gotoTimer.GetElapsedSeconds()<1.5) { // focuser take a bit of time to start moving and reporting it's moving.
+    if(m_gotoTimer.GetElapsedSeconds()<0.5) { // focuser take a bit of time to start moving and reporting it's moving.
         return nErr;
     }
     
@@ -358,13 +391,25 @@ int CCCAController::isGoToComplete(bool &bComplete)
 
     m_CCA_Settings.nCurPos = getPosition();
     if(m_CCA_Settings.nCurPos != m_nTargetPos) {
-        // we have an error as we're not moving but not at the target position
+        if(m_nGotoTries == 0) {
+            bComplete = false;
+            m_nGotoTries++;
+            gotoPosition(m_nTargetPos);
+        }
+        else if (m_nGotoTries>MAX_GOTO_RETRY){
+            m_nGotoTries = 0;
+            // we have an error as we're not moving but not at the target position
 #ifdef PLUGIN_DEBUG
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [isGoToComplete] **** ERROR **** Not moving and not at the target position." << std::endl;
-        m_sLogFile.flush();
+            m_sLogFile << "["<<getTimeStamp()<<"]"<< " [isGoToComplete] **** ERROR **** Not moving and not at the target position affter " << MAX_GOTO_RETRY << "tries." << std::endl;
+            m_sLogFile.flush();
 #endif
-        m_nTargetPos = m_CCA_Settings.nCurPos;
-        nErr = ERR_CMDFAILED;
+            m_nTargetPos = m_CCA_Settings.nCurPos;
+            nErr = ERR_CMDFAILED;
+        }
+
+    } else {
+
+        m_nGotoTries = 0;
     }
     return nErr;
 }
@@ -453,6 +498,7 @@ int CCCAController::setFanOn(bool bOn)
     int nByteWriten = 0;
     int i=0;
     byte cHIDBuffer[REPORT_SIZE];
+    int nNbTimeOut = 0;
 
     m_W_CCA_Adv_Settings.bSetFanOn = bOn;
 
@@ -479,29 +525,39 @@ int CCCAController::setFanOn(bool bOn)
     for(i=0; i<3; i++) {
 #ifdef PLUGIN_DEBUG
         hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] " << i << " sending : " << hexOut << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] " << i << " sending : " << std::endl << hexOut << std::endl;
         m_sLogFile.flush();
 #endif
-        if(m_DevAccessMutex.try_lock()) {
-            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
-            m_DevAccessMutex.unlock();
-            if(nByteWriten<0) {
+
+        nNbTimeOut = 0;
+        while(nNbTimeOut < 3) {
+            if(m_DevAccessMutex.try_lock()) {
+                nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
+                m_DevAccessMutex.unlock();
+                if(nByteWriten<0) {
+                    nNbTimeOut++;
+                    std::this_thread::yield();
+                }
+                else {
+                    break; // all good, no need to retry
+                }
+            }
+            else {
 #ifdef PLUGIN_DEBUG
-                m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] nByteWriten : " << nByteWriten << std::endl;
+                m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] Couldn't lock device" << std::endl;
                 m_sLogFile.flush();
 #endif
-                return ERR_CMDFAILED;
+                nNbTimeOut++;
+                std::this_thread::yield();
             }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread in case we got an error
         }
-        else {
-#ifdef PLUGIN_DEBUG
-            m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] Couldn't lock device" << std::endl;
-            m_sLogFile.flush();
-#endif
-            return ERR_CMDFAILED;
-        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
     }
+
+    if(nNbTimeOut>=3)
+        nErr = ERR_CMDFAILED;
 
     return nErr;
 }
@@ -605,9 +661,9 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
             nTmp = m_CCA_Settings.nMaxPos;
         m_CCA_Settings.nPreset3 = nTmp;
 
-        m_CCA_Settings.fAirTemp              = float(Get32(Buffer, 45)) / 10.0;
-        m_CCA_Settings.fTubeTemp             = float(Get32(Buffer, 49)) / 10.0;
-        m_CCA_Settings.fMirorTemp            = float(Get32(Buffer, 53)) / 10.0;
+        m_CCA_Settings.fAirTemp              = float(Get32(Buffer, 45)) / 10.0f;
+        m_CCA_Settings.fTubeTemp             = float(Get32(Buffer, 49)) / 10.0f;
+        m_CCA_Settings.fMirorTemp            = float(Get32(Buffer, 53)) / 10.0f;
         m_CCA_Settings.nBacklashSteps        = Get32(Buffer, 57);
          
 #ifdef PLUGIN_DEBUG
@@ -670,6 +726,7 @@ int CCCAController::sendSettings()
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
     byte cHIDBuffer[REPORT_SIZE];
+    int nNbTimeOut = 0;
 
     if(!m_bIsConnected)
         return ERR_COMMNOLINK;
@@ -702,19 +759,33 @@ int CCCAController::sendSettings()
 
 #ifdef PLUGIN_DEBUG
     hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
-    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings] sending : " << hexOut << std::endl;
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings] sending : " << std::endl << hexOut << std::endl;
     m_sLogFile.flush();
 #endif
 
-    if(m_DevAccessMutex.try_lock()) {
-        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
-        m_DevAccessMutex.unlock();
-        if(nByteWriten<0)
-            nErr = ERR_CMDFAILED;
+    nNbTimeOut = 0;
+    while(nNbTimeOut < 3) {
+        if(m_DevAccessMutex.try_lock()) {
+            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
+            m_DevAccessMutex.unlock();
+            if(nByteWriten<0) {
+                nNbTimeOut++;
+                std::this_thread::yield();
+            }
+            else {
+                break; // all good, no need to retry
+            }
+        }
+        else {
+            nNbTimeOut++;
+            std::this_thread::yield();
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread in case we got an error
     }
-    else {
+
+    if(nNbTimeOut>=3)
         nErr = ERR_CMDFAILED;
-    }
+
 #ifdef PLUGIN_DEBUG
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings] nByteWriten : " << nByteWriten << std::endl;
     m_sLogFile.flush();
@@ -728,6 +799,7 @@ int CCCAController::sendSettings2()
     int nErr = PLUGIN_OK;
     int nByteWriten = 0;
     byte cHIDBuffer[REPORT_SIZE];
+    int nNbTimeOut = 0;
 
     if(!m_bIsConnected)
         return ERR_COMMNOLINK;
@@ -751,19 +823,32 @@ int CCCAController::sendSettings2()
 
 #ifdef PLUGIN_DEBUG
     hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
-    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings2] sending : " << hexOut << std::endl;
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings2] sending : " << std::endl << hexOut << std::endl;
     m_sLogFile.flush();
 #endif
+    nNbTimeOut = 0;
+    while(nNbTimeOut < 3) {
+        if(m_DevAccessMutex.try_lock()) {
+            nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
+            m_DevAccessMutex.unlock();
+            if(nByteWriten<0) {
+                nNbTimeOut++;
+                std::this_thread::yield();
+            }
+            else {
+                break; // all good, no need to retry
+            }
+        }
+        else {
+            nNbTimeOut++;
+            std::this_thread::yield();
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread in case we got an error
+    }
 
-    if(m_DevAccessMutex.try_lock()) {
-        nByteWriten = hid_write(m_DevHandle, cHIDBuffer, REPORT_SIZE);
-        m_DevAccessMutex.unlock();
-        if(nByteWriten<0)
-            nErr = ERR_CMDFAILED;
-    }
-    else {
+    if(nNbTimeOut>=3)
         nErr = ERR_CMDFAILED;
-    }
+
 #ifdef PLUGIN_DEBUG
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings2] nByteWriten : " << nByteWriten << std::endl;
     m_sLogFile.flush();

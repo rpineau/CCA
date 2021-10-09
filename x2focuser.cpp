@@ -352,7 +352,7 @@ int	X2Focuser::endFocGoto(void)
 
 int X2Focuser::amountCountFocGoto(void) const					
 { 
-	return 4;
+	return 9;
 }
 
 int	X2Focuser::amountNameFromIndexFocGoto(const int& nZeroBasedIndex, BasicStringInterface& strDisplayName, int& nAmount)
@@ -361,9 +361,14 @@ int	X2Focuser::amountNameFromIndexFocGoto(const int& nZeroBasedIndex, BasicStrin
 	{
 		default:
 		case 0: strDisplayName="10 steps"; nAmount=10;break;
-		case 1: strDisplayName="100 steps"; nAmount=100;break;
-		case 2: strDisplayName="1000 steps"; nAmount=1000;break;
-        case 3: strDisplayName="10000 steps"; nAmount=10000;break;
+        case 1: strDisplayName="50 steps"; nAmount=10;break;
+		case 2: strDisplayName="100 steps"; nAmount=100;break;
+        case 3: strDisplayName="250 steps"; nAmount=100;break;
+        case 4: strDisplayName="500 steps"; nAmount=100;break;
+		case 5: strDisplayName="1000 steps"; nAmount=1000;break;
+        case 6: strDisplayName="2500 steps"; nAmount=1000;break;
+        case 7: strDisplayName="5000 steps"; nAmount=1000;break;
+        case 8: strDisplayName="10000 steps"; nAmount=10000;break;
 	}
 	return SB_OK;
 }

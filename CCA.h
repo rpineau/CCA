@@ -33,12 +33,13 @@
 #include "hidapi.h"
 #include "StopWatch.h"
 
-#define PLUGIN_VERSION      1.1
+#define PLUGIN_VERSION      1.11
 
 #define PLUGIN_DEBUG 3
 
 #define MAX_TIMEOUT         1000
 #define REPORT_SIZE         65 // 64 byte buffer + report ID
+#define MAX_GOTO_RETRY      3   // 3 retiries on goto if the focuser didn't move
 
 #define VENDOR_ID   0x20E1
 #define PRODUCT_ID  0x0002
@@ -173,6 +174,7 @@ protected:
 
     int             m_nTargetPos;
     bool            m_bPosLimitEnabled;
+    int             m_nGotoTries;
 
     int             m_nTempSource;
 
