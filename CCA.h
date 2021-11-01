@@ -33,7 +33,7 @@
 #include "hidapi.h"
 #include "StopWatch.h"
 
-#define PLUGIN_VERSION      1.11
+#define PLUGIN_VERSION      1.12
 
 #define PLUGIN_DEBUG 3
 

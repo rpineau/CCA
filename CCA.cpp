@@ -11,7 +11,7 @@ void threaded_sender(std::future<void> futureObj, CCCAController *CCAControllerO
 {
     const byte cmdData[REPORT_SIZE] = {0x00, 0x01, Dummy, 0x00};
 
-    while (futureObj.wait_for(std::chrono::milliseconds(750)) == std::future_status::timeout) {
+    while (futureObj.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout) {
         if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
             hid_write(hidDevice, cmdData, sizeof(cmdData));
             CCAControllerObj->m_DevAccessMutex.unlock();
@@ -270,8 +270,13 @@ int CCCAController::haltFocuser()
         }
     }
 
-    if(nNbTimeOut>=3)
+    if(nNbTimeOut>=3) {
+#ifdef PLUGIN_DEBUG
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [haltFocuser] ERROR Timeout sending command : " << std::endl;
+        m_sLogFile.flush();
+#endif
         nErr = ERR_CMDFAILED;
+    }
     m_nGotoTries = MAX_GOTO_RETRY+1; // prevent goto retries
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
@@ -333,6 +338,7 @@ int CCCAController::gotoPosition(int nPos)
                 nNbTimeOut++;
                 std::this_thread::yield();
             }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
         }
 
     #ifdef PLUGIN_DEBUG
@@ -341,8 +347,13 @@ int CCCAController::gotoPosition(int nPos)
     #endif
     }
 
-    if(nNbTimeOut>=3)
+    if(nNbTimeOut>=3) {
+#ifdef PLUGIN_DEBUG
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] ERROR Timeout sending command : " << std::endl;
+        m_sLogFile.flush();
+#endif
         nErr = ERR_CMDFAILED;
+    }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
     m_gotoTimer.Reset();
@@ -556,9 +567,13 @@ int CCCAController::setFanOn(bool bOn)
         std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
     }
 
-    if(nNbTimeOut>=3)
+    if(nNbTimeOut>=3) {
+#ifdef PLUGIN_DEBUG
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] ERROR Timeout" << std::endl;
+        m_sLogFile.flush();
+#endif
         nErr = ERR_CMDFAILED;
-
+    }
     return nErr;
 }
 
@@ -783,8 +798,13 @@ int CCCAController::sendSettings()
         std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread in case we got an error
     }
 
-    if(nNbTimeOut>=3)
+    if(nNbTimeOut>=3) {
+#ifdef PLUGIN_DEBUG
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings] ERROR Timeout sending command : " << std::endl;
+        m_sLogFile.flush();
+#endif
         nErr = ERR_CMDFAILED;
+    }
 
 #ifdef PLUGIN_DEBUG
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings] nByteWriten : " << nByteWriten << std::endl;
@@ -846,8 +866,13 @@ int CCCAController::sendSettings2()
         std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread in case we got an error
     }
 
-    if(nNbTimeOut>=3)
+    if(nNbTimeOut>=3) {
+#ifdef PLUGIN_DEBUG
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings2] ERROR Timeout sending command : " << std::endl;
+        m_sLogFile.flush();
+#endif
         nErr = ERR_CMDFAILED;
+    }
 
 #ifdef PLUGIN_DEBUG
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings2] nByteWriten : " << nByteWriten << std::endl;
