@@ -232,10 +232,7 @@ int CCCAController::haltFocuser()
     byte cHIDBuffer[REPORT_SIZE];
     int nNbTimeOut = 0;
 
-    if(!m_bIsConnected)
-        return ERR_COMMNOLINK;
-
-    if(!m_DevHandle)
+    if(!m_bIsConnected || !m_DevHandle)
         return ERR_COMMNOLINK;
 
     memset(cHIDBuffer, 0, REPORT_SIZE);
@@ -290,11 +287,8 @@ int CCCAController::gotoPosition(int nPos)
     byte cHIDBuffer[REPORT_SIZE];
     int nNbTimeOut = 0;
 
-    if(!m_bIsConnected)
+    if(!m_bIsConnected || !m_DevHandle)
 		return ERR_COMMNOLINK;
-
-    if(!m_DevHandle)
-        return ERR_COMMNOLINK;
 
     if (nPos>m_CCA_Settings.nMaxPos)
         return ERR_LIMITSEXCEEDED;
@@ -364,8 +358,8 @@ int CCCAController::moveRelativeToPosision(int nSteps)
 {
     int nErr;
 
-	if(!m_bIsConnected)
-		return ERR_COMMNOLINK;
+    if(!m_bIsConnected || !m_DevHandle)
+        return ERR_COMMNOLINK;
 
 #ifdef PLUGIN_DEBUG
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [moveRelativeToPosision] goto relative position : " << nSteps << std::endl;
@@ -383,10 +377,7 @@ int CCCAController::isGoToComplete(bool &bComplete)
 {
     int nErr = PLUGIN_OK;
 	
-	if(!m_bIsConnected)
-		return ERR_COMMNOLINK;
-
-    if(!m_DevHandle)
+    if(!m_bIsConnected || !m_DevHandle)
         return ERR_COMMNOLINK;
 
     bComplete = false;
@@ -407,7 +398,7 @@ int CCCAController::isGoToComplete(bool &bComplete)
             m_nGotoTries++;
             gotoPosition(m_nTargetPos);
         }
-        else if (m_nGotoTries>MAX_GOTO_RETRY){
+        else if (m_nGotoTries > MAX_GOTO_RETRY){
             m_nGotoTries = 0;
             // we have an error as we're not moving but not at the target position
 #ifdef PLUGIN_DEBUG
@@ -431,11 +422,9 @@ int CCCAController::getFirmwareVersion(std::string &sFirmware)
 {
     int nErr = PLUGIN_OK;
     
-    if(!m_bIsConnected)
+    if(!m_bIsConnected || !m_DevHandle)
         return ERR_COMMNOLINK;
 
-    if(!m_DevHandle)
-        return ERR_COMMNOLINK;
     sFirmware.clear();
     if(m_GlobalMutex.try_lock()) {
         if(m_CCA_Settings.sVersion.size()) {
@@ -513,10 +502,7 @@ int CCCAController::setFanOn(bool bOn)
 
     m_W_CCA_Adv_Settings.bSetFanOn = bOn;
 
-    if(!m_bIsConnected) {
-        return ERR_COMMNOLINK;
-    }
-    if(!m_DevHandle)
+    if(!m_bIsConnected || !m_DevHandle)
         return ERR_COMMNOLINK;
 
     memset(cHIDBuffer, 0, REPORT_SIZE);
