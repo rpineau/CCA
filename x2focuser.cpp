@@ -124,6 +124,7 @@ int	X2Focuser::establishLink(void)
     int nErr;
 
     X2MutexLocker ml(GetMutex());
+    m_CCAController.setRestorePosition(m_pIniUtil->readInt(PARENT_KEY, LAST_POSITION, 0), m_pIniUtil->readInt(PARENT_KEY, RESTORE_POSITION, 0) == 0? false : true);
     // get serial port device name
     nErr = m_CCAController.Connect();
     if(nErr)

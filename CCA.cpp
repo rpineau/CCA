@@ -454,6 +454,8 @@ int CCCAController::isGoToComplete(bool &bComplete)
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [isGoToComplete] Complete : " << (bComplete?"Yes":"No") << std::endl;
     m_sLogFile.flush();
 #endif
+    if(bComplete && m_W_CCA_Adv_Settings.bRestorePosition)
+        m_W_CCA_Adv_Settings.nSavedPosistion = m_nTargetPos ;
     return nErr;
 }
 
