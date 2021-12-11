@@ -215,6 +215,8 @@ int	X2Focuser::execModalSettingsDialog(void)
     nTmp = m_CCAController.getTemperatureSource();
     dx->setCurrentIndex("comboBox", nTmp);
 
+    dx->setChecked("checkBox", m_CCAController.getRestoreOnConnect()?1:0);
+    
     //Display the user interface
     mUiEnabled = true;
     if ((nErr = ui->exec(bPressedOK)))
@@ -336,6 +338,8 @@ int	X2Focuser::isCompleteFocGoto(bool& bComplete) const
     X2Focuser* pMe = (X2Focuser*)this;
     X2MutexLocker ml(pMe->GetMutex());
 	nErr = pMe->m_CCAController.isGoToComplete(bComplete);
+    if(bComplete)
+        m_pIniUtil->writeInt(PARENT_KEY, LAST_POSITION, pMe->m_CCAController.getPosition());
 
     return nErr;
 }

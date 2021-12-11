@@ -133,7 +133,7 @@ CCCAController::~CCCAController()
 int CCCAController::Connect()
 {
     int nErr = PLUGIN_OK;
-
+    bool bComplete = false;
 #ifdef PLUGIN_DEBUG
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Connect] Called." << std::endl;
     m_sLogFile.flush();
@@ -176,7 +176,19 @@ int CCCAController::Connect()
     setFanOn(m_W_CCA_Adv_Settings.bSetFanOn);
 
     if(m_W_CCA_Adv_Settings.bRestorePosition) {
+#ifdef PLUGIN_DEBUG
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Connect] restoring position to :  " << m_W_CCA_Adv_Settings.nSavedPosistion << std::endl;
+        m_sLogFile.flush();
+#endif
         gotoPosition(m_W_CCA_Adv_Settings.nSavedPosistion);
+        while(!bComplete) {
+            nErr = isGoToComplete(bComplete);
+            if(nErr) {  // we ignore this on purpose
+                nErr = PLUGIN_OK;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
     }
     
     return nErr;
@@ -241,11 +253,11 @@ int CCCAController::haltFocuser()
         cHIDBuffer[1] = 0x01; // command length
         cHIDBuffer[2] = Stop; // command
 
-    #ifdef PLUGIN_DEBUG
+#if defined PLUGIN_DEBUG && PLUGIN_DEBUG >= 3
         hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [haltFocuser] sending : " << std::endl << hexOut << std::endl;
         m_sLogFile.flush();
-    #endif
+#endif
         nNbTimeOut = 0;
         while(nNbTimeOut < 3) {
             if(m_DevAccessMutex.try_lock()) {
@@ -294,7 +306,29 @@ int CCCAController::gotoPosition(int nPos)
         return ERR_LIMITSEXCEEDED;
 
     memset(cHIDBuffer, 0, REPORT_SIZE);
-    if(m_CCA_Settings.bIsHold && !m_CCA_Settings.bIsMoving) {
+
+    while(m_CCA_Settings.bIsMoving) {
+#ifdef PLUGIN_DEBUG
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] bIsMoving is set, waiting." << std::endl;
+        m_sLogFile.flush();
+#endif
+        // need to wait for move to be over.
+        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // wait for a bit, background thread will update m_CCA_Settings.bIsMoving
+        std::this_thread::yield();
+        nNbTimeOut++;
+        if(nNbTimeOut>10) {  // 1 second !
+#ifdef PLUGIN_DEBUG
+            m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] Error, bIsMoving still set, timeout." << std::endl;
+            m_sLogFile.flush();
+#endif
+            return ERR_CMDFAILED;
+        }
+    }
+
+    nNbTimeOut = 0;
+    m_nTargetPos = nPos;
+
+    if(m_CCA_Settings.bIsHold) {
     #ifdef PLUGIN_DEBUG
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] goto :  " << std::dec << nPos << " (0x" << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << nPos <<")" << std::dec << std::endl;
         m_sLogFile.flush();
@@ -308,11 +342,11 @@ int CCCAController::gotoPosition(int nPos)
         cHIDBuffer[6] = byte(nPos &0x000000FF);
         // the rest of the buffer contains all zero because of the memset above
 
-    #ifdef PLUGIN_DEBUG
+#if defined PLUGIN_DEBUG && PLUGIN_DEBUG >= 3
         hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] sending : " << std::endl << hexOut << std::endl;
         m_sLogFile.flush();
-    #endif
+#endif
 
         nNbTimeOut = 0;
         while(nNbTimeOut < 3) {
@@ -348,7 +382,6 @@ int CCCAController::gotoPosition(int nPos)
 #endif
         nErr = ERR_CMDFAILED;
     }
-
     std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
     m_gotoTimer.Reset();
     return nErr;
@@ -366,8 +399,7 @@ int CCCAController::moveRelativeToPosision(int nSteps)
     m_sLogFile.flush();
 #endif
 
-    m_nTargetPos = m_CCA_Settings.nCurPos + nSteps;
-    nErr = gotoPosition(m_nTargetPos);
+    nErr = gotoPosition(m_CCA_Settings.nCurPos + nSteps);
     return nErr;
 }
 
@@ -387,6 +419,10 @@ int CCCAController::isGoToComplete(bool &bComplete)
     }
     
     if(m_CCA_Settings.bIsMoving) {
+#ifdef PLUGIN_DEBUG
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [isGoToComplete] Complete : " << (bComplete?"Yes":"No") << std::endl;
+        m_sLogFile.flush();
+#endif
         return nErr;
     }
     bComplete = true;
@@ -413,6 +449,11 @@ int CCCAController::isGoToComplete(bool &bComplete)
 
         m_nGotoTries = 0;
     }
+
+#ifdef PLUGIN_DEBUG
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [isGoToComplete] Complete : " << (bComplete?"Yes":"No") << std::endl;
+    m_sLogFile.flush();
+#endif
     return nErr;
 }
 
@@ -520,7 +561,7 @@ int CCCAController::setFanOn(bool bOn)
     // this needs to be confirmed with a proper JHID communication dum between the driver and a real CCA.
     //
     for(i=0; i<3; i++) {
-#ifdef PLUGIN_DEBUG
+#if defined PLUGIN_DEBUG && PLUGIN_DEBUG >= 3
         hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] " << i << " sending : " << std::endl << hexOut << std::endl;
         m_sLogFile.flush();
@@ -595,6 +636,11 @@ void CCCAController::setRestorePosition(int nPosition, bool bRestoreOnConnect)
 
 }
 
+bool CCCAController::getRestoreOnConnect()
+{
+    return m_W_CCA_Adv_Settings.bRestorePosition;
+}
+
 #pragma mark command and response functions
 
 
@@ -605,7 +651,7 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
     const std::lock_guard<std::mutex> lock(m_GlobalMutex);
     int nTmp;
 
-#ifdef PLUGIN_DEBUG
+#if defined PLUGIN_DEBUG && PLUGIN_DEBUG >= 3
     hexdump(Buffer,  nLength, hexOut);
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] Buffer size " << std::dec << nLength <<", content : " << std::endl << hexOut << std::endl;
     m_sLogFile.flush();
@@ -667,36 +713,36 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         m_CCA_Settings.fMirorTemp            = float(Get32(Buffer, 53)) / 10.0f;
         m_CCA_Settings.nBacklashSteps        = Get32(Buffer, 57);
          
-#ifdef PLUGIN_DEBUG
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nCurPos                : " << std::dec << m_CCA_Settings.nCurPos << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsWired               : " << (m_CCA_Settings.bIsWired?"Yes":"No") << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsAtOrigin            : " << (m_CCA_Settings.bIsAtOrigin?"Yes":"No") << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsMoving              : " << (m_CCA_Settings.bIsMoving?"Yes":"No") << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bFanIsOn               : " << (m_CCA_Settings.bFanIsOn?"Yes":"No") << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsBatteryOperated     : " << (m_CCA_Settings.bIsBatteryOperated?"Yes":"No") << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_bIsHold                : " << (m_CCA_Settings.bIsHold?"Yes":"No") << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nDriveMode             : " << std::dec << int(m_CCA_Settings.nDriveMode) << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nStepSize              : " << std::dec << int(m_CCA_Settings.nStepSize) << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBitsFlag              : " << std::dec << int(m_CCA_Settings.nBitsFlag) << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nAirTempOffset         : " << std::dec << int(m_CCA_Settings.nAirTempOffset) << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nTubeTempOffset        : " << std::dec << int(m_CCA_Settings.nTubeTempOffset) << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMirorTempOffset       : " << std::dec << int(m_CCA_Settings.nMirorTempOffset) << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nDeltaT                : " << std::dec << int(m_CCA_Settings.nDeltaT) << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nStillTime             : " << std::dec << int(m_CCA_Settings.nStillTime) << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_sVersion               : " << m_CCA_Settings.sVersion << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBackstep              : " << std::dec << int(m_CCA_Settings.nBackstep) << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBacklash              : " << std::dec << int(m_CCA_Settings.nBacklash) << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nImmpp                 : " << std::dec << m_CCA_Settings.nImmpp << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_dMillimetersPerStep    : " << std::fixed << std::setprecision(6) << m_CCA_Settings.dMillimetersPerStep << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMaxPos                : " << std::dec << m_CCA_Settings.nMaxPos << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset0               : " << std::dec << m_CCA_Settings.nPreset0 << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset1               : " << std::dec << m_CCA_Settings.nPreset1 << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset2               : " << std::dec << m_CCA_Settings.nPreset2 << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPreset3               : " << std::dec << m_CCA_Settings.nPreset3 << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_fAirTemp               : " << std::fixed << std::setprecision(2) << m_CCA_Settings.fAirTemp << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_fTubeTemp              : " << std::fixed << std::setprecision(2) << m_CCA_Settings.fTubeTemp << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_fMirorTemp             : " << std::fixed << std::setprecision(2) << m_CCA_Settings.fMirorTemp << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBacklashSteps         : " << std::dec << m_CCA_Settings.nBacklashSteps << std::endl;
+#if defined PLUGIN_DEBUG && PLUGIN_DEBUG >= 3
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nCurPos                : " << std::dec << m_CCA_Settings.nCurPos << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.bIsWired               : " << (m_CCA_Settings.bIsWired?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.bIsAtOrigin            : " << (m_CCA_Settings.bIsAtOrigin?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.bIsMoving              : " << (m_CCA_Settings.bIsMoving?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.bFanIsOn               : " << (m_CCA_Settings.bFanIsOn?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.bIsBatteryOperated     : " << (m_CCA_Settings.bIsBatteryOperated?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.bIsHold                : " << (m_CCA_Settings.bIsHold?"Yes":"No") << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nDriveMode             : " << std::dec << int(m_CCA_Settings.nDriveMode) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nStepSize              : " << std::dec << int(m_CCA_Settings.nStepSize) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nBitsFlag              : " << std::dec << int(m_CCA_Settings.nBitsFlag) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nAirTempOffset         : " << std::dec << int(m_CCA_Settings.nAirTempOffset) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nTubeTempOffset        : " << std::dec << int(m_CCA_Settings.nTubeTempOffset) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nMirorTempOffset       : " << std::dec << int(m_CCA_Settings.nMirorTempOffset) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nDeltaT                : " << std::dec << int(m_CCA_Settings.nDeltaT) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nStillTime             : " << std::dec << int(m_CCA_Settings.nStillTime) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.sVersion               : " << m_CCA_Settings.sVersion << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nBackstep              : " << std::dec << int(m_CCA_Settings.nBackstep) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nBacklash              : " << std::dec << int(m_CCA_Settings.nBacklash) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nImmpp                 : " << std::dec << m_CCA_Settings.nImmpp << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.dMillimetersPerStep    : " << std::fixed << std::setprecision(6) << m_CCA_Settings.dMillimetersPerStep << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nMaxPos                : " << std::dec << m_CCA_Settings.nMaxPos << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nPreset0               : " << std::dec << m_CCA_Settings.nPreset0 << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nPreset1               : " << std::dec << m_CCA_Settings.nPreset1 << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nPreset2               : " << std::dec << m_CCA_Settings.nPreset2 << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nPreset3               : " << std::dec << m_CCA_Settings.nPreset3 << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.fAirTemp               : " << std::fixed << std::setprecision(2) << m_CCA_Settings.fAirTemp << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.fTubeTemp              : " << std::fixed << std::setprecision(2) << m_CCA_Settings.fTubeTemp << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.fMirorTemp             : " << std::fixed << std::setprecision(2) << m_CCA_Settings.fMirorTemp << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Settings.nBacklashSteps         : " << std::dec << m_CCA_Settings.nBacklashSteps << std::endl;
         m_sLogFile.flush();
 #endif
     }
@@ -708,14 +754,14 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
         m_CCA_Adv_Settings.nPowerTimer       = Get16(Buffer, 10);
         m_CCA_Adv_Settings.nFanTimer         = Get16(Buffer, 12);
         m_CCA_Adv_Settings.nOriginOffset     = Get16(Buffer, 14);
-#ifdef PLUGIN_DEBUG
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMaxPps            : " << std::dec << m_CCA_Adv_Settings.nMaxPps << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nMinPps            : " << std::dec << m_CCA_Adv_Settings.nMinPps << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nGetbackRate       : " << std::dec << int(m_CCA_Adv_Settings.nGetbackRate) << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nBatteryMaxRate    : " << std::dec << int(m_CCA_Adv_Settings.nBatteryMaxRate) << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nPowerTimer        : " << std::dec << m_CCA_Adv_Settings.nPowerTimer << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nFanTimer          : " << std::dec << m_CCA_Adv_Settings.nFanTimer << std::endl;
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_nOriginOffset      : " << std::dec << m_CCA_Adv_Settings.nOriginOffset << std::endl;
+#if defined PLUGIN_DEBUG && PLUGIN_DEBUG >= 3
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Adv_Settings.nMaxPps            : " << std::dec << m_CCA_Adv_Settings.nMaxPps << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Adv_Settings.nMinPps            : " << std::dec << m_CCA_Adv_Settings.nMinPps << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Adv_Settings.nGetbackRate       : " << std::dec << int(m_CCA_Adv_Settings.nGetbackRate) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Adv_Settings.nBatteryMaxRate    : " << std::dec << int(m_CCA_Adv_Settings.nBatteryMaxRate) << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Adv_Settings.nPowerTimer        : " << std::dec << m_CCA_Adv_Settings.nPowerTimer << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Adv_Settings.nFanTimer          : " << std::dec << m_CCA_Adv_Settings.nFanTimer << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [parseResponse] m_CCA_Adv_Settings.nOriginOffset      : " << std::dec << m_CCA_Adv_Settings.nOriginOffset << std::endl;
         m_sLogFile.flush();
 #endif
     }
@@ -758,7 +804,7 @@ int CCCAController::sendSettings()
     put32(cHIDBuffer, 30, m_W_CCA_Settings.nPreset2);
     put32(cHIDBuffer, 34, m_W_CCA_Settings.nPreset3);
 
-#ifdef PLUGIN_DEBUG
+#if defined PLUGIN_DEBUG && PLUGIN_DEBUG >= 3
     hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings] sending : " << std::endl << hexOut << std::endl;
     m_sLogFile.flush();
@@ -827,7 +873,7 @@ int CCCAController::sendSettings2()
     put16(cHIDBuffer, 13, m_W_CCA_Adv_Settings.nFanTimer);
     put32(cHIDBuffer, 15, m_W_CCA_Adv_Settings.nOriginOffset);
 
-#ifdef PLUGIN_DEBUG
+#if defined PLUGIN_DEBUG && PLUGIN_DEBUG >= 3
     hexdump(cHIDBuffer,  REPORT_SIZE, hexOut);
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings2] sending : " << std::endl << hexOut << std::endl;
     m_sLogFile.flush();

@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "CCA X2 Driver"
-#define MyAppVersion "1.12"
+#define MyAppVersion "1.15"
 #define MyAppPublisher "RTI-Zone"
 #define MyAppURL "https://rti-zone.org"
 
@@ -70,10 +70,10 @@ var
 function TSXInstallDir(Param: String) : String;
 begin
   LoadResult := LoadStringFromFile(ExpandConstant('{userdocs}') + '\Software Bisque\TheSkyX Professional Edition\TheSkyXInstallPath.txt', Location);
-  { Check that could open the file}
   if not LoadResult then
-    RaiseException('Unable to find the installation path for The Sky X');
-  {Check that the file exists}
+    LoadResult := LoadStringFromFile(ExpandConstant('{userdocs}') + '\Software Bisque\TheSky Professional Edition 64\TheSkyXInstallPath.txt', Location);
+    if not LoadResult then
+      RaiseException('Unable to find the installation path for The Sky X');
   if not DirExists(Location) then
     RaiseException('The SkyX installation directory ' + Location + ' does not exist');
   Result := Location;
