@@ -94,9 +94,9 @@
       <property name="geometry">
        <rect>
         <x>16</x>
-        <y>24</y>
+        <y>20</y>
         <width>184</width>
-        <height>16</height>
+        <height>20</height>
        </rect>
       </property>
       <property name="text">
@@ -107,7 +107,7 @@
       <property name="geometry">
        <rect>
         <x>200</x>
-        <y>24</y>
+        <y>20</y>
         <width>91</width>
         <height>24</height>
        </rect>
@@ -131,8 +131,8 @@
      <widget class="QRadioButton" name="radioButton">
       <property name="geometry">
        <rect>
-        <x>88</x>
-        <y>64</y>
+        <x>90</x>
+        <y>80</y>
         <width>48</width>
         <height>24</height>
        </rect>
@@ -144,8 +144,8 @@
      <widget class="QRadioButton" name="radioButton_2">
       <property name="geometry">
        <rect>
-        <x>144</x>
-        <y>64</y>
+        <x>150</x>
+        <y>80</y>
         <width>48</width>
         <height>24</height>
        </rect>
@@ -157,8 +157,8 @@
      <widget class="QLabel" name="label_2">
       <property name="geometry">
        <rect>
-        <x>24</x>
-        <y>64</y>
+        <x>30</x>
+        <y>80</y>
         <width>48</width>
         <height>24</height>
        </rect>
@@ -174,9 +174,9 @@
       <property name="geometry">
        <rect>
         <x>16</x>
-        <y>104</y>
+        <y>120</y>
         <width>144</width>
-        <height>16</height>
+        <height>20</height>
        </rect>
       </property>
       <property name="text">
@@ -190,9 +190,9 @@
       <property name="geometry">
        <rect>
         <x>16</x>
-        <y>128</y>
+        <y>140</y>
         <width>144</width>
-        <height>16</height>
+        <height>20</height>
        </rect>
       </property>
       <property name="text">
@@ -206,9 +206,9 @@
       <property name="geometry">
        <rect>
         <x>16</x>
-        <y>152</y>
+        <y>160</y>
         <width>144</width>
-        <height>16</height>
+        <height>20</height>
        </rect>
       </property>
       <property name="text">
@@ -222,9 +222,9 @@
       <property name="geometry">
        <rect>
         <x>184</x>
-        <y>104</y>
+        <y>120</y>
         <width>60</width>
-        <height>16</height>
+        <height>20</height>
        </rect>
       </property>
       <property name="text">
@@ -235,9 +235,9 @@
       <property name="geometry">
        <rect>
         <x>184</x>
-        <y>128</y>
+        <y>140</y>
         <width>60</width>
-        <height>16</height>
+        <height>20</height>
        </rect>
       </property>
       <property name="text">
@@ -248,9 +248,9 @@
       <property name="geometry">
        <rect>
         <x>184</x>
-        <y>152</y>
+        <y>160</y>
         <width>60</width>
-        <height>16</height>
+        <height>20</height>
        </rect>
       </property>
       <property name="text">
@@ -261,13 +261,26 @@
       <property name="geometry">
        <rect>
         <x>32</x>
-        <y>192</y>
+        <y>200</y>
         <width>200</width>
         <height>20</height>
        </rect>
       </property>
       <property name="text">
        <string>Restore position on connect</string>
+      </property>
+     </widget>
+     <widget class="QRadioButton" name="radioButton_3">
+      <property name="geometry">
+       <rect>
+        <x>210</x>
+        <y>80</y>
+        <width>70</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Auto</string>
       </property>
      </widget>
     </widget>

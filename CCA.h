@@ -44,6 +44,9 @@
 #define VENDOR_ID   0x20E1
 #define PRODUCT_ID  0x0002
 
+#define AUTOFAN_ON  8
+#define AUTOFAN_OFF 0
+
 enum CCA_Errors    {PLUGIN_OK = 0, NOT_CONNECTED, CCA_CANT_CONNECT, CCA_BAD_CMD_RESPONSE, COMMAND_FAILED};
 enum MotorDir       {NORMAL = 0 , REVERSE};
 enum MotorStatus    {IDLE = 0, MOVING};
@@ -144,6 +147,8 @@ public:
     
     int         setFanOn(bool bOn);
     bool        getFanState();
+    int         setAutoFan(bool bOn, bool bApply=false);
+    bool        getAutoFanState();
     
     void        setTemperatureSource(int nSource);
     int         getTemperatureSource();
@@ -158,6 +163,10 @@ public:
 
     std::mutex          m_GlobalMutex;
     std::mutex          m_DevAccessMutex;
+
+#ifdef PLUGIN_DEBUG
+    void  log(const std::string sLogLine);
+#endif
 
 protected:
 

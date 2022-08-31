@@ -12,6 +12,8 @@ X2Focuser::X2Focuser(const char* pszDisplayName,
 												TickCountInterface					* pTickCountIn)
 
 {
+    bool bTmp1,bTmp2;
+    
 	m_pTheSkyXForMounts				= pTheSkyXIn;
 	m_pSleeper						= pSleeperIn;
 	m_pIniUtil						= pIniUtilIn;
@@ -21,11 +23,22 @@ X2Focuser::X2Focuser(const char* pszDisplayName,
 	
 	m_bLinked = false;
 	m_nPosition = 0;
-
+    
     // Read in settings
     if (m_pIniUtil) {
+        bTmp1 = m_pIniUtil->readInt(PARENT_KEY, AUTOFAN_STATE, 0) == 0? false : true;
+        bTmp2 = m_pIniUtil->readInt(PARENT_KEY, FAN_STATE, 0) == 0? false : true;
         m_CCAController.setTemperatureSource(m_pIniUtil->readInt(PARENT_KEY, TEMP_SOURCE, AIR));
-        m_CCAController.setFanOn(m_pIniUtil->readInt(PARENT_KEY, FAN_STATE, 0) == 0? false : true);
+        if(bTmp1) {
+            m_CCAController.setAutoFan(true);
+        }
+        else {
+            m_CCAController.setAutoFan(false);
+            if(bTmp2)
+                m_CCAController.setFanOn(true);
+            else
+                m_CCAController.setFanOn(false);
+        }
         m_CCAController.setRestorePosition(m_pIniUtil->readInt(PARENT_KEY, LAST_POSITION, 0), m_pIniUtil->readInt(PARENT_KEY, RESTORE_POSITION, 0) == 0? false : true);
     }
 }
@@ -169,7 +182,7 @@ int	X2Focuser::execModalSettingsDialog(void)
     bool bPressedOK = false;
     std::stringstream sTmpBuf;
     int nTmp;
-    bool bTmp;
+    bool bTmp1,bTmp2;
     
     mUiEnabled = false;
 
@@ -203,14 +216,18 @@ int	X2Focuser::execModalSettingsDialog(void)
     }
 
     // if not connected, it will used the "saved" state, if connected the current state.
-    dx->setEnabled("radioButton",true);
-    dx->setEnabled("radioButton_2",true);
-    bTmp = m_CCAController.getFanState();
-    if(bTmp)
-        dx->setChecked("radioButton", 1);
-    else
-        dx->setChecked("radioButton_2", 1);
-
+    bTmp1 = m_CCAController.getAutoFanState();
+    bTmp2 = m_CCAController.getFanState();
+    if(bTmp1) {
+        dx->setChecked("radioButton_3", 1);
+    }
+    else {
+        if(bTmp2)
+            dx->setChecked("radioButton", 1);
+        else
+            dx->setChecked("radioButton_2", 1);
+    }
+    
     // This doesn't require to be connected as this is the user selection of what temperature source he wants reported to TSX
     dx->setEnabled("comboBox",true);
     nTmp = m_CCAController.getTemperatureSource();
@@ -229,10 +246,19 @@ int	X2Focuser::execModalSettingsDialog(void)
         nTmp = dx->currentIndex("comboBox");
         m_CCAController.setTemperatureSource(nTmp);
         m_pIniUtil->writeInt(PARENT_KEY, TEMP_SOURCE, nTmp);
-        if(dx->isChecked("radioButton"))
-            m_pIniUtil->writeInt(PARENT_KEY, FAN_STATE, 1);
-        else
+
+        if(dx->isChecked("radioButton")) {
+            m_pIniUtil->writeInt(PARENT_KEY, AUTOFAN_STATE, 0);
             m_pIniUtil->writeInt(PARENT_KEY, FAN_STATE, 0);
+        }
+        else if(dx->isChecked("radioButton_2")){
+            m_pIniUtil->writeInt(PARENT_KEY, AUTOFAN_STATE, 0);
+            m_pIniUtil->writeInt(PARENT_KEY, FAN_STATE, 1);
+        }
+        else if(dx->isChecked("radioButton_3")) {
+            m_pIniUtil->writeInt(PARENT_KEY, AUTOFAN_STATE, 1);
+            m_pIniUtil->writeInt(PARENT_KEY, FAN_STATE, 0);
+        }
 
         if(dx->isChecked("checkBox"))
             m_pIniUtil->writeInt(PARENT_KEY, RESTORE_POSITION, 1);
@@ -269,11 +295,18 @@ void X2Focuser::uiEvent(X2GUIExchangeInterface* uiex, const char* pszEvent)
                 uiex->setChecked("radioButton_2", 1);
         }
     }
+
     
     if (!strcmp(pszEvent, "on_radioButton_clicked")) {
         m_CCAController.setFanOn(true);
+        m_CCAController.setAutoFan(false,true);
     }
     else if (!strcmp(pszEvent, "on_radioButton_2_clicked")) {
+        m_CCAController.setFanOn(false);
+        m_CCAController.setAutoFan(false,true);
+    }
+    else if (!strcmp(pszEvent, "on_radioButton_2_clicked")) {
+        m_CCAController.setAutoFan(true,true);
         m_CCAController.setFanOn(false);
     }
 

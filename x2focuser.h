@@ -35,6 +35,7 @@ class TickCountInterface;
 #define PARENT_KEY			"CCA"
 #define TEMP_SOURCE         "TempSource"
 #define FAN_STATE           "FanState"
+#define AUTOFAN_STATE       "AutoFan"
 #define LAST_POSITION       "LastPosition"
 #define RESTORE_POSITION    "RestorePosition"
 

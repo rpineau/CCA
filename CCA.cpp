@@ -534,6 +534,7 @@ int CCCAController::getPosLimit()
     return m_CCA_Settings.nMaxPos;
 }
 
+// It will only work of autofan is off, and that one is not on the property screen. So if autofan is on, you cannot manipulate the fan.
 
 int CCCAController::setFanOn(bool bOn)
 {
@@ -612,6 +613,21 @@ bool CCCAController::getFanState()
         return m_W_CCA_Adv_Settings.bSetFanOn;
     else
         return m_CCA_Settings.bFanIsOn;
+}
+
+int CCCAController::setAutoFan(bool bOn, bool bApply)
+{
+    int nErr = PLUGIN_OK;
+
+    m_CCA_Settings.nBitsFlag = (m_CCA_Settings.nBitsFlag & 0xf7) | (bOn?AUTOFAN_ON:AUTOFAN_OFF);
+    if(bApply)
+        nErr = sendSettings();
+    return nErr;
+}
+
+bool CCCAController::getAutoFanState()
+{
+    return (m_CCA_Settings.nBitsFlag & AUTOFAN_ON) == AUTOFAN_ON?true:false;
 }
 
 void CCCAController::setTemperatureSource(int nSource)
@@ -998,6 +1014,13 @@ void  CCCAController::hexdump(const byte *inputData, int inputSize,  std::string
         ssTmp << "0x" << std::uppercase << std::setfill('0') << std::setw(2) << std::hex << (int)inputData[idx] <<" ";
     }
     outHex.assign(ssTmp.str());
+}
+
+void CCCAController::log(const std::string sLogLine)
+{
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [log] " << sLogLine << std::endl;
+    m_sLogFile.flush();
+
 }
 
 const std::string CCCAController::getTimeStamp()
