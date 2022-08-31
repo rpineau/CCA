@@ -35,7 +35,7 @@
 
 #define PLUGIN_VERSION      1.15
 
-#define PLUGIN_DEBUG 1
+// #define PLUGIN_DEBUG 1
 
 #define MAX_TIMEOUT         1000
 #define REPORT_SIZE         65 // 64 byte buffer + report ID
