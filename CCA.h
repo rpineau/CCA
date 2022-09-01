@@ -33,9 +33,9 @@
 #include "hidapi.h"
 #include "StopWatch.h"
 
-#define PLUGIN_VERSION      1.15
+#define PLUGIN_VERSION      1.21
 
-// #define PLUGIN_DEBUG 1
+#define PLUGIN_DEBUG 3
 
 #define MAX_TIMEOUT         1000
 #define REPORT_SIZE         65 // 64 byte buffer + report ID

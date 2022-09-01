@@ -249,11 +249,11 @@ int	X2Focuser::execModalSettingsDialog(void)
 
         if(dx->isChecked("radioButton")) {
             m_pIniUtil->writeInt(PARENT_KEY, AUTOFAN_STATE, 0);
-            m_pIniUtil->writeInt(PARENT_KEY, FAN_STATE, 0);
+            m_pIniUtil->writeInt(PARENT_KEY, FAN_STATE, 1);
         }
         else if(dx->isChecked("radioButton_2")){
             m_pIniUtil->writeInt(PARENT_KEY, AUTOFAN_STATE, 0);
-            m_pIniUtil->writeInt(PARENT_KEY, FAN_STATE, 1);
+            m_pIniUtil->writeInt(PARENT_KEY, FAN_STATE, 0);
         }
         else if(dx->isChecked("radioButton_3")) {
             m_pIniUtil->writeInt(PARENT_KEY, AUTOFAN_STATE, 1);
@@ -298,14 +298,17 @@ void X2Focuser::uiEvent(X2GUIExchangeInterface* uiex, const char* pszEvent)
 
     
     if (!strcmp(pszEvent, "on_radioButton_clicked")) {
+        m_CCAController.log("on_radioButton_clicked, Fan On, Auto Fan Off");
+        m_CCAController.setAutoFan(false,true);
         m_CCAController.setFanOn(true);
-        m_CCAController.setAutoFan(false,true);
     }
     else if (!strcmp(pszEvent, "on_radioButton_2_clicked")) {
+        m_CCAController.log("on_radioButton_2_clicked, Fan Off, Auto Fan Off");
+        m_CCAController.setAutoFan(false,true);
         m_CCAController.setFanOn(false);
-        m_CCAController.setAutoFan(false,true);
     }
-    else if (!strcmp(pszEvent, "on_radioButton_2_clicked")) {
+    else if (!strcmp(pszEvent, "on_radioButton_3_clicked")) {
+        m_CCAController.log("on_radioButton_3_clicked, Fan Off, Auto Fan On");
         m_CCAController.setAutoFan(true,true);
         m_CCAController.setFanOn(false);
     }

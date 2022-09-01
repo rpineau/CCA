@@ -134,6 +134,7 @@ int CCCAController::Connect()
 {
     int nErr = PLUGIN_OK;
     bool bComplete = false;
+    bool bAutoFan = false;
 #ifdef PLUGIN_DEBUG
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Connect] Called." << std::endl;
     m_sLogFile.flush();
@@ -172,8 +173,13 @@ int CCCAController::Connect()
         m_thSender = std::thread(&threaded_sender, std::move(m_futureObjSender), this,  m_DevHandle);
         m_ThreadsAreRunning = true;
     }
-    
-    setFanOn(m_W_CCA_Adv_Settings.bSetFanOn);
+
+    bAutoFan = getAutoFanState();
+    if(bAutoFan) {
+        setAutoFan(bAutoFan, true);
+    }
+    else
+        setFanOn(m_W_CCA_Adv_Settings.bSetFanOn);
 
     if(m_W_CCA_Adv_Settings.bRestorePosition) {
 #ifdef PLUGIN_DEBUG
@@ -544,6 +550,11 @@ int CCCAController::setFanOn(bool bOn)
     byte cHIDBuffer[REPORT_SIZE];
     int nNbTimeOut = 0;
 
+#ifdef PLUGIN_DEBUG
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] set fan to " << (bOn?"On":"Off") << std::endl;
+    m_sLogFile.flush();
+#endif
+
     m_W_CCA_Adv_Settings.bSetFanOn = bOn;
 
     if(!m_bIsConnected || !m_DevHandle)
@@ -561,7 +572,7 @@ int CCCAController::setFanOn(bool bOn)
 
     //
     // the Takahashi ASCOM drvier 1.1.2 seems to send the command 3 times..
-    // this needs to be confirmed with a proper JHID communication dum between the driver and a real CCA.
+    // this needs to be confirmed with a proper HID communication dump between the driver and a real CCA.
     //
     for(i=0; i<3; i++) {
 #if defined PLUGIN_DEBUG && PLUGIN_DEBUG >= 3
@@ -619,7 +630,17 @@ int CCCAController::setAutoFan(bool bOn, bool bApply)
 {
     int nErr = PLUGIN_OK;
 
+#ifdef PLUGIN_DEBUG
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setAutoFan] set auto fan to " << (bOn?"On":"Off") << std::endl;
+    m_sLogFile.flush();
+#endif
+
     m_CCA_Settings.nBitsFlag = (m_CCA_Settings.nBitsFlag & 0xf7) | (bOn?AUTOFAN_ON:AUTOFAN_OFF);
+
+#ifdef PLUGIN_DEBUG
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getAutoFanState] m_CCA_Settings.nBitsFlag : " << int(m_CCA_Settings.nBitsFlag) << std::endl;
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getAutoFanState]  is auto fan on ? " << ((m_CCA_Settings.nBitsFlag & AUTOFAN_ON) == AUTOFAN_ON?"Yes":"No") << std::endl;
+#endif
     if(bApply)
         nErr = sendSettings();
     return nErr;
@@ -627,6 +648,12 @@ int CCCAController::setAutoFan(bool bOn, bool bApply)
 
 bool CCCAController::getAutoFanState()
 {
+#ifdef PLUGIN_DEBUG
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getAutoFanState] m_CCA_Settings.nBitsFlag : " << int(m_CCA_Settings.nBitsFlag) << std::endl;
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getAutoFanState]  is auto fan on ? " << ((m_CCA_Settings.nBitsFlag & AUTOFAN_ON) == AUTOFAN_ON?"Yes":"No") << std::endl;
+    m_sLogFile.flush();
+#endif
+
     return (m_CCA_Settings.nBitsFlag & AUTOFAN_ON) == AUTOFAN_ON?true:false;
 }
 
