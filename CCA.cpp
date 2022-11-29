@@ -262,9 +262,31 @@ int CCCAController::reconnect()
 {
     int nErr = PLUGIN_OK;
 
+#ifdef PLUGIN_DEBUG
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [reconnect] Connection lost, reconnecting." << std::endl;
+        m_sLogFile.flush();
+#endif
+
     Disconnect();
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    Connect();
+    // vendor id is : 0x20E1 and the product id is : 0x0002.
+    m_DevHandle = hid_open(VENDOR_ID, PRODUCT_ID, NULL);
+    if (!m_DevHandle) {
+        m_bIsConnected = false;
+#ifdef PLUGIN_DEBUG
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [reconnect] hid_open failed for vendor id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex <<  VENDOR_ID << " product id " << std::uppercase << std::setfill('0') << std::setw(4) << std::hex << PRODUCT_ID << std::dec << std::endl;
+        m_sLogFile.flush();
+#endif
+        return CCA_CANT_CONNECT;
+    }
+
+    m_bIsConnected = true;
+    hid_set_nonblocking(m_DevHandle, 1);
+    startTreads();
+#ifdef PLUGIN_DEBUG
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [reconnect] Reconnected." << std::endl;
+        m_sLogFile.flush();
+#endif
     return nErr;
 }
 
