@@ -10,10 +10,13 @@
 void threaded_sender(std::future<void> futureObj, CCCAController *CCAControllerObj, hid_device *hidDevice)
 {
     const byte cmdData[REPORT_SIZE] = {0x00, 0x01, Dummy, 0x00};
-
+    int nByteWriten = 0;
     while (futureObj.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout) {
         if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
-            hid_write(hidDevice, cmdData, sizeof(cmdData));
+            nByteWriten = hid_write(hidDevice, cmdData, sizeof(cmdData));
+            if(nByteWriten == -1)  { // error, we need to reconnect
+                CCAControllerObj->m_bNeedReconnect = true;
+            }
             CCAControllerObj->m_DevAccessMutex.unlock();
         }
         else {
@@ -34,6 +37,9 @@ void threaded_poller(std::future<void> futureObj, CCCAController *CCAControllerO
             if(nbRead>0){
                 CCAControllerObj->parseResponse(cHIDBuffer, nbRead);
             }
+            if(nbRead==-1) { // error, we need to reconnect
+                CCAControllerObj->m_bNeedReconnect = true;
+            }
         }
         else {
             std::this_thread::yield();
@@ -45,6 +51,7 @@ CCCAController::CCCAController()
 {
     m_bDebugLog = false;
     m_bIsConnected = false;
+    m_bNeedReconnect = false;
     m_CCA_Settings.nCurPos = 0;
     m_nTargetPos = 0;
     m_nTempSource = AIR;
@@ -159,21 +166,7 @@ int CCCAController::Connect()
 
     // Set the hid_read() function to be non-blocking.
     hid_set_nonblocking(m_DevHandle, 1);
-    if(!m_ThreadsAreRunning) {
-#ifdef PLUGIN_DEBUG
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Connect] Starting HID threads." << std::endl;
-        m_sLogFile.flush();
-#endif
-        m_exitSignal = new std::promise<void>();
-        m_futureObj = m_exitSignal->get_future();
-        m_exitSignalSender = new std::promise<void>();
-        m_futureObjSender = m_exitSignalSender->get_future();
-        
-        m_th = std::thread(&threaded_poller, std::move(m_futureObj), this, m_DevHandle);
-        m_thSender = std::thread(&threaded_sender, std::move(m_futureObjSender), this,  m_DevHandle);
-        m_ThreadsAreRunning = true;
-    }
-
+    startTreads();
     bAutoFan = getAutoFanState();
     if(bAutoFan) {
         setAutoFan(bAutoFan, true);
@@ -196,7 +189,7 @@ int CCCAController::Connect()
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
-    
+    m_bNeedReconnect = false;
     return nErr;
 }
 
@@ -208,22 +201,7 @@ void CCCAController::Disconnect()
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Disconnect] Disconnecting from device." << std::endl;
     m_sLogFile.flush();
 #endif
-    if(m_ThreadsAreRunning) {
-#ifdef PLUGIN_DEBUG
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Disconnect] Waiting for threads to exit." << std::endl;
-        m_sLogFile.flush();
-#endif
-        m_exitSignal->set_value();
-        m_exitSignalSender->set_value();
-        m_th.join();
-        m_thSender.join();
-        delete m_exitSignal;
-        delete m_exitSignalSender;
-        m_exitSignal = nullptr;
-        m_exitSignalSender = nullptr;
-        m_ThreadsAreRunning = false;
-    }
-
+    stopTreads();
     if(m_bIsConnected)
             hid_close(m_DevHandle);
 
@@ -242,6 +220,56 @@ void CCCAController::Disconnect()
 #endif
 }
 
+
+void CCCAController::startTreads()
+{
+    if(!m_ThreadsAreRunning) {
+#ifdef PLUGIN_DEBUG
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [startTreads] Starting HID threads." << std::endl;
+        m_sLogFile.flush();
+#endif
+        m_exitSignal = new std::promise<void>();
+        m_futureObj = m_exitSignal->get_future();
+        m_exitSignalSender = new std::promise<void>();
+        m_futureObjSender = m_exitSignalSender->get_future();
+
+        m_th = std::thread(&threaded_poller, std::move(m_futureObj), this, m_DevHandle);
+        m_thSender = std::thread(&threaded_sender, std::move(m_futureObjSender), this,  m_DevHandle);
+        m_ThreadsAreRunning = true;
+    }
+}
+
+void CCCAController::stopTreads()
+{
+    if(m_ThreadsAreRunning) {
+#ifdef PLUGIN_DEBUG
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [stopTreads] Waiting for threads to exit." << std::endl;
+        m_sLogFile.flush();
+#endif
+        m_exitSignal->set_value();
+        m_exitSignalSender->set_value();
+        m_th.join();
+        m_thSender.join();
+        delete m_exitSignal;
+        delete m_exitSignalSender;
+        m_exitSignal = nullptr;
+        m_exitSignalSender = nullptr;
+        m_ThreadsAreRunning = false;
+    }
+}
+
+int CCCAController::reconnect()
+{
+    int nErr = PLUGIN_OK;
+
+    Disconnect();
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    Connect();
+    return nErr;
+}
+
+
+
 #pragma mark move commands
 int CCCAController::haltFocuser()
 {
@@ -252,6 +280,11 @@ int CCCAController::haltFocuser()
 
     if(!m_bIsConnected || !m_DevHandle)
         return ERR_COMMNOLINK;
+
+    if(m_bNeedReconnect) {
+        reconnect();
+        return ERR_CMDFAILED;
+    }
 
     memset(cHIDBuffer, 0, REPORT_SIZE);
     if(m_CCA_Settings.bIsMoving) {
@@ -290,6 +323,7 @@ int CCCAController::haltFocuser()
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [haltFocuser] ERROR Timeout sending command : " << std::endl;
         m_sLogFile.flush();
 #endif
+        reconnect();
         nErr = ERR_CMDFAILED;
     }
     m_nGotoTries = MAX_GOTO_RETRY+1; // prevent goto retries
@@ -311,6 +345,11 @@ int CCCAController::gotoPosition(int nPos)
     if (nPos>m_CCA_Settings.nMaxPos)
         return ERR_LIMITSEXCEEDED;
 
+    if(m_bNeedReconnect) {
+        reconnect();
+        return ERR_CMDFAILED;
+    }
+
     memset(cHIDBuffer, 0, REPORT_SIZE);
 
     while(m_CCA_Settings.bIsMoving) {
@@ -327,6 +366,7 @@ int CCCAController::gotoPosition(int nPos)
             m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] Error, bIsMoving still set, timeout." << std::endl;
             m_sLogFile.flush();
 #endif
+            reconnect();
             return ERR_CMDFAILED;
         }
     }
@@ -386,6 +426,7 @@ int CCCAController::gotoPosition(int nPos)
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [gotoPosition] ERROR Timeout sending command : " << std::endl;
         m_sLogFile.flush();
 #endif
+        reconnect();
         nErr = ERR_CMDFAILED;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(100)); // give time to the thread to read the returned report
@@ -399,6 +440,11 @@ int CCCAController::moveRelativeToPosision(int nSteps)
 
     if(!m_bIsConnected || !m_DevHandle)
         return ERR_COMMNOLINK;
+
+    if(m_bNeedReconnect) {
+        reconnect();
+        return ERR_CMDFAILED;
+    }
 
 #ifdef PLUGIN_DEBUG
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [moveRelativeToPosision] goto relative position : " << nSteps << std::endl;
@@ -419,6 +465,11 @@ int CCCAController::isGoToComplete(bool &bComplete)
         return ERR_COMMNOLINK;
 
     bComplete = false;
+
+    if(m_bNeedReconnect) {
+        reconnect();
+        return ERR_CMDFAILED;
+    }
 
     if(m_gotoTimer.GetElapsedSeconds()<0.5) { // focuser take a bit of time to start moving and reporting it's moving.
         return nErr;
@@ -492,6 +543,8 @@ int CCCAController::getFirmwareVersion(std::string &sFirmware)
 
 double CCCAController::getTemperature()
 {
+    if(m_bNeedReconnect)
+        reconnect();
     // need to allow user to select the focuser temp source
     switch(m_nTempSource) {
         case AIR:
@@ -530,6 +583,9 @@ double CCCAController::getTemperature(int nSource)
 
 int CCCAController::getPosition()
 {
+
+    if(m_bNeedReconnect)
+        reconnect();
 
     return m_CCA_Settings.nCurPos;
 }
@@ -613,6 +669,7 @@ int CCCAController::setFanOn(bool bOn)
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [setFanOn] ERROR Timeout" << std::endl;
         m_sLogFile.flush();
 #endif
+        reconnect();
         nErr = ERR_CMDFAILED;
     }
     return nErr;
@@ -880,6 +937,7 @@ int CCCAController::sendSettings()
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings] ERROR Timeout sending command : " << std::endl;
         m_sLogFile.flush();
 #endif
+        reconnect();
         nErr = ERR_CMDFAILED;
     }
 
@@ -948,6 +1006,7 @@ int CCCAController::sendSettings2()
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [sendSettings2] ERROR Timeout sending command : " << std::endl;
         m_sLogFile.flush();
 #endif
+        reconnect();
         nErr = ERR_CMDFAILED;
     }
 

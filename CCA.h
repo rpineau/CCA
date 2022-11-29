@@ -33,7 +33,7 @@
 #include "hidapi.h"
 #include "StopWatch.h"
 
-#define PLUGIN_VERSION      1.21
+#define PLUGIN_VERSION      1.25
 
 #define PLUGIN_DEBUG 3
 
@@ -168,7 +168,14 @@ public:
     void  log(const std::string sLogLine);
 #endif
 
+    bool            m_bNeedReconnect;
+
+
 protected:
+
+    void            startTreads();
+    void            stopTreads();
+    int             reconnect();
 
     int             Get32(const byte *buffer, int position);
     int             Get16(const byte *buffer, int position);
@@ -177,7 +184,6 @@ protected:
     void            put16(byte *buffer, int position, int value);
 
     hid_device      *m_DevHandle;
-    
     bool            m_bDebugLog;
     bool            m_bIsConnected;
     char            m_szFirmwareVersion[64];
