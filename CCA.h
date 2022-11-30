@@ -173,8 +173,8 @@ public:
 
 protected:
 
-    void            startTreads();
-    void            stopTreads();
+    void            startThreads();
+    void            stopThreads();
     int             reconnect();
 
     int             Get32(const byte *buffer, int position);

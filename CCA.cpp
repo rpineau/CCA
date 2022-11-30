@@ -166,7 +166,7 @@ int CCCAController::Connect()
 
     // Set the hid_read() function to be non-blocking.
     hid_set_nonblocking(m_DevHandle, 1);
-    startTreads();
+    startThreads();
     bAutoFan = getAutoFanState();
     if(bAutoFan) {
         setAutoFan(bAutoFan, true);
@@ -201,7 +201,7 @@ void CCCAController::Disconnect()
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [Disconnect] Disconnecting from device." << std::endl;
     m_sLogFile.flush();
 #endif
-    stopTreads();
+    stopThreads();
     if(m_bIsConnected)
             hid_close(m_DevHandle);
 
@@ -221,11 +221,11 @@ void CCCAController::Disconnect()
 }
 
 
-void CCCAController::startTreads()
+void CCCAController::startThreads()
 {
     if(!m_ThreadsAreRunning) {
 #ifdef PLUGIN_DEBUG
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [startTreads] Starting HID threads." << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [startThreads] Starting HID threads." << std::endl;
         m_sLogFile.flush();
 #endif
         m_exitSignal = new std::promise<void>();
@@ -239,11 +239,11 @@ void CCCAController::startTreads()
     }
 }
 
-void CCCAController::stopTreads()
+void CCCAController::stopThreads()
 {
     if(m_ThreadsAreRunning) {
 #ifdef PLUGIN_DEBUG
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [stopTreads] Waiting for threads to exit." << std::endl;
+        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [stopThreads] Waiting for threads to exit." << std::endl;
         m_sLogFile.flush();
 #endif
         m_exitSignal->set_value();
@@ -267,7 +267,13 @@ int CCCAController::reconnect()
         m_sLogFile.flush();
 #endif
 
-    Disconnect();
+    stopThreads();
+    if(m_bIsConnected)
+        hid_close(m_DevHandle);
+
+    m_DevHandle = nullptr;
+    m_bIsConnected = false;
+
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     // vendor id is : 0x20E1 and the product id is : 0x0002.
     m_DevHandle = hid_open(VENDOR_ID, PRODUCT_ID, NULL);
@@ -282,11 +288,12 @@ int CCCAController::reconnect()
 
     m_bIsConnected = true;
     hid_set_nonblocking(m_DevHandle, 1);
-    startTreads();
+    startThreads();
 #ifdef PLUGIN_DEBUG
         m_sLogFile << "["<<getTimeStamp()<<"]"<< " [reconnect] Reconnected." << std::endl;
         m_sLogFile.flush();
 #endif
+    m_bNeedReconnect = false;
     return nErr;
 }
 
