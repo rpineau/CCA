@@ -169,7 +169,9 @@ public:
 #endif
 
     bool            m_bNeedReconnect;
-
+    int             m_nPosBeforeReconnect;
+    bool            m_bCheckPosition;
+    
 
 protected:
 
@@ -193,7 +195,7 @@ protected:
     int             m_nGotoTries;
 
     int             m_nTempSource;
-
+    
     // the read thread keep updating these
     // Takahashi focuser data for 0x3C from device
     CCA_Settings        m_CCA_Settings;
@@ -211,7 +213,7 @@ protected:
 
     CStopWatch      m_cmdTimer;
     CStopWatch      m_gotoTimer;
-
+    CStopWatch      m_reconnectPositionTimer;
     // threads
     bool                m_ThreadsAreRunning;
     std::promise<void> *m_exitSignal;
