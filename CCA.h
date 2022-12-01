@@ -154,6 +154,7 @@ public:
     int         getTemperatureSource();
 
     void        setRestorePosition(int nPosition, bool bRestoreOnConnect);
+    void        getRestorePosition(int &nPosition);
     bool        getRestoreOnConnect();
 
     void        parseResponse(byte *Buffer, int nLength);
@@ -168,10 +169,11 @@ public:
     void  log(const std::string sLogLine);
 #endif
 
-    bool            m_bNeedReconnect;
-    int             m_nPosBeforeReconnect;
-    bool            m_bCheckPosition;
-    
+    std::atomic<bool>   m_bNeedReconnect;
+    std::atomic<int>    m_nPosBeforeReconnect;
+    std::atomic<bool>   m_bCheckPosition;
+    std::atomic<bool>   m_bAutoFanBeforeReconnect;
+    std::atomic<bool>   m_bSetFanOnBeforeReconnect;
 
 protected:
 
@@ -187,7 +189,7 @@ protected:
 
     hid_device      *m_DevHandle;
     bool            m_bDebugLog;
-    bool            m_bIsConnected;
+    std::atomic<bool>   m_bIsConnected;
     char            m_szFirmwareVersion[64];
 
     int             m_nTargetPos;
