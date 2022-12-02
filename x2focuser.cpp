@@ -330,7 +330,7 @@ int	X2Focuser::focPosition(int& nPosition)
 
 int	X2Focuser::focMinimumLimit(int& nMinLimit) 		
 {
-	nMinLimit = - m_CCAController.getPosLimit(); // when initallizing it seems the focuser can be far bellow 0
+    nMinLimit = 0;
     return SB_OK;
 }
 

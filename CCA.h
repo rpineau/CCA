@@ -170,10 +170,10 @@ public:
 #endif
 
     std::atomic<bool>   m_bNeedReconnect;
-    std::atomic<int>    m_nPosBeforeReconnect;
-    std::atomic<bool>   m_bCheckPosition;
-    std::atomic<bool>   m_bAutoFanBeforeReconnect;
-    std::atomic<bool>   m_bSetFanOnBeforeReconnect;
+    int    m_nPosBeforeReconnect;
+    bool   m_bCheckPosition;
+    bool   m_bAutoFanBeforeReconnect;
+    bool   m_bSetFanOnBeforeReconnect;
 
 protected:
 

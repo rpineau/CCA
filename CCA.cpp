@@ -12,20 +12,19 @@ void threaded_sender(std::future<void> futureObj, CCCAController *CCAControllerO
     const byte cmdData[REPORT_SIZE] = {0x00, 0x01, Dummy, 0x00};
     int nByteWriten = 0;
     while (futureObj.wait_for(std::chrono::milliseconds(1000)) == std::future_status::timeout) {
-        if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
-            nByteWriten = hid_write(hidDevice, cmdData, sizeof(cmdData));
-            if(nByteWriten == -1)  { // error, we need to reconnect
-                CCAControllerObj->m_bNeedReconnect = true;
-                CCAControllerObj->m_nPosBeforeReconnect = CCAControllerObj->getPosition();
-                CCAControllerObj->m_bAutoFanBeforeReconnect =  CCAControllerObj->getAutoFanState();
-                CCAControllerObj->m_bSetFanOnBeforeReconnect =  CCAControllerObj->getFanState();
-
+        if(!CCAControllerObj->m_bNeedReconnect) {
+            if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
+                nByteWriten = hid_write(hidDevice, cmdData, sizeof(cmdData));
+                if(nByteWriten == -1)  { // error, we need to reconnect
+                    CCAControllerObj->m_bNeedReconnect = true;
+                }
+                CCAControllerObj->m_DevAccessMutex.unlock();
             }
-            CCAControllerObj->m_DevAccessMutex.unlock();
+            else {
+                std::this_thread::yield();
+            }
         }
-        else {
-            std::this_thread::yield();
-        }
+
     }
 }
 
@@ -35,21 +34,20 @@ void threaded_poller(std::future<void> futureObj, CCCAController *CCAControllerO
     byte cHIDBuffer[REPORT_SIZE];
 
     while (futureObj.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
-        if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
-            nbRead = hid_read(hidDevice, cHIDBuffer, sizeof(cHIDBuffer));
-            CCAControllerObj->m_DevAccessMutex.unlock();
-            if(nbRead>0){
-                CCAControllerObj->parseResponse(cHIDBuffer, nbRead);
+        if(!CCAControllerObj->m_bNeedReconnect) {
+            if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
+                nbRead = hid_read(hidDevice, cHIDBuffer, sizeof(cHIDBuffer));
+                CCAControllerObj->m_DevAccessMutex.unlock();
+                if(nbRead>0){
+                    CCAControllerObj->parseResponse(cHIDBuffer, nbRead);
+                }
+                if(nbRead==-1) { // error, we need to reconnect
+                    CCAControllerObj->m_bNeedReconnect = true;
+                }
             }
-            if(nbRead==-1) { // error, we need to reconnect
-                CCAControllerObj->m_bNeedReconnect = true;
-                CCAControllerObj->m_nPosBeforeReconnect = CCAControllerObj->getPosition();
-                CCAControllerObj->m_bAutoFanBeforeReconnect =  CCAControllerObj->getAutoFanState();
-                CCAControllerObj->m_bSetFanOnBeforeReconnect =  CCAControllerObj->getFanState();
+            else {
+                std::this_thread::yield();
             }
-        }
-        else {
-            std::this_thread::yield();
         }
     }
 }
@@ -198,6 +196,7 @@ int CCCAController::Connect()
             m_bCheckPosition = true;
             m_reconnectPositionTimer.Reset();
             m_nPosBeforeReconnect = nSavedPosition;
+            m_CCA_Settings.nCurPos = nSavedPosition;
             bComplete = true; // skip the wait
         }
         while(!bComplete) {
@@ -287,6 +286,7 @@ int CCCAController::reconnect()
         m_sLogFile.flush();
 #endif
 
+
     stopThreads();
     if(m_bIsConnected)
         hid_close(m_DevHandle);
@@ -306,6 +306,17 @@ int CCCAController::reconnect()
 #endif
         return CCA_CANT_CONNECT;
     }
+
+    m_nPosBeforeReconnect = m_CCA_Settings.nCurPos;
+    m_bAutoFanBeforeReconnect =  getAutoFanState();
+    m_bSetFanOnBeforeReconnect =  getFanState();
+
+#ifdef PLUGIN_DEBUG
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [reconnect] m_nPosBeforeReconnect :  " << std::dec << m_nPosBeforeReconnect << std::endl;
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [reconnect] m_bAutoFanBeforeReconnect :  " << std::dec << (m_bAutoFanBeforeReconnect?"Yes":"No") << std::endl;
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [reconnect] m_bSetFanOnBeforeReconnect :  " << std::dec << (m_bSetFanOnBeforeReconnect?"Yes":"No") << std::endl;
+    m_sLogFile.flush();
+#endif
 
     m_bIsConnected = true;
     hid_set_nonblocking(m_DevHandle, 1);
@@ -623,17 +634,14 @@ int CCCAController::getPosition()
         return m_CCA_Settings.nCurPos;
     }
 
-    if(m_bCheckPosition && m_reconnectPositionTimer.GetElapsedSeconds() > 10) {  // focuser can take up to 10 second to initiallize
+        if (m_bCheckPosition && m_CCA_Settings.bIsAtOrigin && !m_CCA_Settings.bIsMoving) { // at origin and not moving
 #ifdef PLUGIN_DEBUG
-        m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getPosition] Checking if position need to be restored after disconnect/reconnect" << std::endl;
-        m_sLogFile.flush();
-#endif
-        if (m_CCA_Settings.bIsAtOrigin && !m_CCA_Settings.bIsMoving) { // at origin and not moving
-#ifdef PLUGIN_DEBUG
-            m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getPosition] Yes position need to be restored , current position : " <<  m_CCA_Settings.nCurPos << " , positionb before disconnect : " << m_nPosBeforeReconnect << std::endl;
+            m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getPosition]  position need to be restored , current position : " <<  m_CCA_Settings.nCurPos << " , position before disconnect : " << m_nPosBeforeReconnect << std::endl;
             m_sLogFile.flush();
 #endif
-            gotoPosition(m_nPosBeforeReconnect);
+            if(m_CCA_Settings.nCurPos != m_nPosBeforeReconnect) {
+                gotoPosition(m_nPosBeforeReconnect);
+            }
 #ifdef PLUGIN_DEBUG
             m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getPosition] Restoring Fan state." << std::endl;
             m_sLogFile.flush();
@@ -646,15 +654,9 @@ int CCCAController::getPosition()
 
             m_bCheckPosition = false; // action was taken, no need to recheck until next disconnect
         }
-        else if (!m_CCA_Settings.bIsMoving) {
-            // otherwize we should still be at the previous possition when connection was lost.
-#ifdef PLUGIN_DEBUG
-            m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getPosition] Focuser is not moving and not that origin, not changing position" << std::endl;
-            m_sLogFile.flush();
-#endif
-            m_bCheckPosition = false; // no need to recheck until next disconnect
-        }
-    }
+
+    if(m_CCA_Settings.nCurPos < 0)
+       return 0;
     return m_CCA_Settings.nCurPos;
 }
 
