@@ -15,10 +15,10 @@ void threaded_sender(std::future<void> futureObj, CCCAController *CCAControllerO
         if(!CCAControllerObj->m_bNeedReconnect) {
             if(hidDevice && CCAControllerObj && CCAControllerObj->m_DevAccessMutex.try_lock()) {
                 nByteWriten = hid_write(hidDevice, cmdData, sizeof(cmdData));
+                CCAControllerObj->m_DevAccessMutex.unlock();
                 if(nByteWriten == -1)  { // error, we need to reconnect
                     CCAControllerObj->m_bNeedReconnect = true;
                 }
-                CCAControllerObj->m_DevAccessMutex.unlock();
             }
             else {
                 std::this_thread::yield();
@@ -77,31 +77,7 @@ CCCAController::CCCAController()
     m_CCA_Settings.fTubeTemp = -100.0;
     m_CCA_Settings.fMirorTemp = -100.0;
 
-    m_W_CCA_Settings.nStepSize = 7;
-    m_W_CCA_Settings.nBitsFlag = 40;
-    m_W_CCA_Settings.nAirTempOffset = 128;
-    m_W_CCA_Settings.nTubeTempOffset = 128;
-    m_W_CCA_Settings.nMirorTempOffset = 128;
-    m_W_CCA_Settings.nDeltaT = 30;
-    m_W_CCA_Settings.nStillTime = 10;
-    m_W_CCA_Settings.nImmpp = 52;
-    m_W_CCA_Settings.nBackstep = 961;
-    m_W_CCA_Settings.nBacklash = 384;
-    m_W_CCA_Settings.nMaxPos = 192307;
-    m_W_CCA_Settings.nPreset0 = 0;
-    m_W_CCA_Settings.nPreset1 = 0;
-    m_W_CCA_Settings.nPreset2 = 0;
-    m_W_CCA_Settings.nPreset3 = 0;
-
-    m_W_CCA_Adv_Settings.nMaxPps = 18000;
-    m_W_CCA_Adv_Settings.nMinPps = 250;
-    m_W_CCA_Adv_Settings.nTorqueIndex = 2;
-    m_W_CCA_Adv_Settings.nGetbackRate = 120;
-    m_W_CCA_Adv_Settings.nBatteryMaxRate = 43;
-    m_W_CCA_Adv_Settings.nPowerTimer = 10;
-    m_W_CCA_Adv_Settings.nFanTimer = 600;
-    m_W_CCA_Adv_Settings.nOriginOffset = 0;
-
+    resetToFactoryDefault();    // set the write  setting to defaults
     m_cmdTimer.Reset();
     
     m_ThreadsAreRunning = false;
@@ -178,12 +154,12 @@ int CCCAController::Connect()
     // Set the hid_read() function to be non-blocking.
     hid_set_nonblocking(m_DevHandle, 1);
     startThreads();
-    bAutoFan = getAutoFanState();
-    if(bAutoFan) {
+
+    if(m_bAutoFan) {
         setAutoFan(bAutoFan, true);
     }
     else
-        setFanOn(m_W_CCA_Adv_Settings.bSetFanOn);
+        setFanOn(m_bFanOn);
 
     getRestorePosition(nSavedPosition);
     if(getRestoreOnConnect()) {
@@ -310,7 +286,7 @@ int CCCAController::reconnect()
     m_nPosBeforeReconnect = m_CCA_Settings.nCurPos;
     m_bAutoFanBeforeReconnect =  getAutoFanState();
     m_bSetFanOnBeforeReconnect =  getFanState();
-
+    m_CCA_Settings.bIsMoving = true;    // assume it's moving, the actual data will reset it to the right state.
 #ifdef PLUGIN_DEBUG
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [reconnect] m_nPosBeforeReconnect :  " << std::dec << m_nPosBeforeReconnect << std::endl;
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [reconnect] m_bAutoFanBeforeReconnect :  " << std::dec << (m_bAutoFanBeforeReconnect?"Yes":"No") << std::endl;
@@ -634,7 +610,7 @@ int CCCAController::getPosition()
         return m_CCA_Settings.nCurPos;
     }
 
-        if (m_bCheckPosition && m_CCA_Settings.bIsAtOrigin && !m_CCA_Settings.bIsMoving) { // at origin and not moving
+        if (m_bCheckPosition && m_CCA_Settings.bIsAtOrigin && !m_CCA_Settings.bIsMoving && m_reconnectPositionTimer.GetElapsedSeconds()>5) { // at origin and not moving
 #ifdef PLUGIN_DEBUG
             m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getPosition]  position need to be restored , current position : " <<  m_CCA_Settings.nCurPos << " , position before disconnect : " << m_nPosBeforeReconnect << std::endl;
             m_sLogFile.flush();
@@ -681,6 +657,13 @@ int CCCAController::setFanOn(bool bOn)
     m_sLogFile.flush();
 #endif
 
+    m_bFanOn = bOn;
+    if(!m_bIsConnected)
+        return nErr;
+
+    // copy current settings to write settings
+    copyCurrentSettingsToWriteSettings();
+    // set our new value
     m_W_CCA_Adv_Settings.bSetFanOn = bOn;
 
     if(!m_bIsConnected || !m_DevHandle)
@@ -748,7 +731,7 @@ int CCCAController::setFanOn(bool bOn)
 bool CCCAController::getFanState()
 {
     if(!m_bIsConnected)
-        return m_W_CCA_Adv_Settings.bSetFanOn;
+        return m_bFanOn;
     else
         return m_CCA_Settings.bFanIsOn;
 }
@@ -762,11 +745,18 @@ int CCCAController::setAutoFan(bool bOn, bool bApply)
     m_sLogFile.flush();
 #endif
 
-    m_CCA_Settings.nBitsFlag = (m_CCA_Settings.nBitsFlag & 0xf7) | (bOn?AUTOFAN_ON:AUTOFAN_OFF);
+    m_bAutoFan = bOn;
+    if(!m_bIsConnected)
+        return nErr;
+
+    // copy current settings to write settings
+    copyCurrentSettingsToWriteSettings();
+    // set our new value
+    m_W_CCA_Settings.nBitsFlag = (m_CCA_Settings.nBitsFlag & 0xf7) | (bOn?AUTOFAN_ON:AUTOFAN_OFF);
 
 #ifdef PLUGIN_DEBUG
-    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getAutoFanState] m_CCA_Settings.nBitsFlag : " << int(m_CCA_Settings.nBitsFlag) << std::endl;
-    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getAutoFanState]  is auto fan on ? " << ((m_CCA_Settings.nBitsFlag & AUTOFAN_ON) == AUTOFAN_ON?"Yes":"No") << std::endl;
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getAutoFanState] m_CCA_Settings.nBitsFlag : " << int(m_W_CCA_Settings.nBitsFlag) << std::endl;
+    m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getAutoFanState]  is auto fan on ? " << ((m_W_CCA_Settings.nBitsFlag & AUTOFAN_ON) == AUTOFAN_ON?"Yes":"No") << std::endl;
 #endif
     if(bApply)
         nErr = sendSettings();
@@ -775,6 +765,9 @@ int CCCAController::setAutoFan(bool bOn, bool bApply)
 
 bool CCCAController::getAutoFanState()
 {
+    if(!m_bIsConnected)
+        return m_bAutoFan;
+
 #ifdef PLUGIN_DEBUG
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getAutoFanState] m_CCA_Settings.nBitsFlag : " << int(m_CCA_Settings.nBitsFlag) << std::endl;
     m_sLogFile << "["<<getTimeStamp()<<"]"<< " [getAutoFanState]  is auto fan on ? " << ((m_CCA_Settings.nBitsFlag & AUTOFAN_ON) == AUTOFAN_ON?"Yes":"No") << std::endl;
@@ -797,6 +790,9 @@ int CCCAController::getTemperatureSource()
 
 void CCCAController::setRestorePosition(int nPosition, bool bRestoreOnConnect)
 {
+    // copy current settings to write settings
+    copyCurrentSettingsToWriteSettings();
+    // set our new value
     m_W_CCA_Adv_Settings.bRestorePosition = bRestoreOnConnect;
     m_W_CCA_Adv_Settings.nSavedPosistion = nPosition;
     
@@ -943,6 +939,35 @@ void CCCAController::parseResponse(byte *Buffer, int nLength)
 #endif
     }
 }
+
+void CCCAController::copyCurrentSettingsToWriteSettings()
+{
+    m_W_CCA_Settings.nStepSize = m_CCA_Settings.nStepSize;
+    m_W_CCA_Settings.nBitsFlag = m_CCA_Settings.nBitsFlag;
+    m_W_CCA_Settings.nAirTempOffset = m_CCA_Settings.nAirTempOffset;
+    m_W_CCA_Settings.nTubeTempOffset = m_CCA_Settings.nTubeTempOffset;
+    m_W_CCA_Settings.nMirorTempOffset = m_CCA_Settings.nMirorTempOffset;
+    m_W_CCA_Settings.nDeltaT = m_CCA_Settings.nDeltaT;
+    m_W_CCA_Settings.nStillTime = m_CCA_Settings.nStillTime;
+    m_W_CCA_Settings.nImmpp = m_CCA_Settings.nImmpp;
+    m_W_CCA_Settings.nBackstep = m_CCA_Settings.nBackstep;
+    m_W_CCA_Settings.nBacklash = m_CCA_Settings.nBacklash;
+    m_W_CCA_Settings.nMaxPos = m_CCA_Settings.nMaxPos;
+    m_W_CCA_Settings.nPreset0 = m_CCA_Settings.nPreset0;
+    m_W_CCA_Settings.nPreset1 = m_CCA_Settings.nPreset1;
+    m_W_CCA_Settings.nPreset2 = m_CCA_Settings.nPreset2;
+    m_W_CCA_Settings.nPreset3 = m_CCA_Settings.nPreset3;
+
+    m_W_CCA_Adv_Settings.nMaxPps = m_CCA_Adv_Settings.nMaxPps;
+    m_W_CCA_Adv_Settings.nMinPps = m_CCA_Adv_Settings.nMinPps;
+    m_W_CCA_Adv_Settings.nTorqueIndex = m_CCA_Adv_Settings.nTorqueIndex;
+    m_W_CCA_Adv_Settings.nGetbackRate = m_CCA_Adv_Settings.nGetbackRate;
+    m_W_CCA_Adv_Settings.nBatteryMaxRate = m_CCA_Adv_Settings.nBatteryMaxRate;
+    m_W_CCA_Adv_Settings.nPowerTimer = m_CCA_Adv_Settings.nPowerTimer;
+    m_W_CCA_Adv_Settings.nFanTimer = m_CCA_Adv_Settings.nFanTimer;
+    m_W_CCA_Adv_Settings.nOriginOffset = m_CCA_Adv_Settings.nOriginOffset;
+}
+
 
 int CCCAController::sendSettings()
 {
@@ -1120,9 +1145,10 @@ int CCCAController::resetToFactoryDefault()
     m_W_CCA_Adv_Settings.nFanTimer = 600;
     m_W_CCA_Adv_Settings.nOriginOffset = 0;
 
-    nErr = sendSettings();
-    nErr |= sendSettings2();
-
+    if(m_bIsConnected) {
+        nErr = sendSettings();
+        nErr |= sendSettings2();
+    }
     return nErr;
 }
 

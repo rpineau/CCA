@@ -33,9 +33,9 @@
 #include "hidapi.h"
 #include "StopWatch.h"
 
-#define PLUGIN_VERSION      1.25
+#define PLUGIN_VERSION      1.27
 
-#define PLUGIN_DEBUG 3
+// #define PLUGIN_DEBUG 3
 
 #define MAX_TIMEOUT         1000
 #define REPORT_SIZE         65 // 64 byte buffer + report ID
@@ -73,7 +73,7 @@ typedef enum {
     Dummy = 0xFF
 } Commands;
 
-typedef struct cca_setting {
+typedef struct cca_setting_atom {
     std::atomic<int>            nCurPos;
     std::atomic<bool>           bIsWired;
     std::atomic<bool>           bIsAtOrigin;
@@ -103,9 +103,9 @@ typedef struct cca_setting {
     std::atomic<float>          fTubeTemp;
     std::atomic<float>          fMirorTemp;
     std::atomic<int>            nBacklashSteps;
-} CCA_Settings;
+} CCA_Settings_Atom;
 
-typedef struct cca_adv_settings {
+typedef struct cca_adv_settings_atom {
     std::atomic<word>           nMaxPps;
     std::atomic<word>           nMinPps;
     std::atomic<byte>           nGetbackRate;
@@ -118,7 +118,56 @@ typedef struct cca_adv_settings {
     std::atomic<int>            nSavedPosistion;
     std::atomic<byte>           nTorqueIndex;
 
+} CCA_Adv_Settings_Atom;
+
+
+typedef struct cca_setting {
+    int            nCurPos;
+    bool           bIsWired;
+    bool           bIsAtOrigin;
+    bool           bIsMoving;
+    bool           bFanIsOn;
+    bool           bIsBatteryOperated;
+    bool           bIsHold;
+    byte           nDriveMode;
+    byte           nStepSize;
+    byte           nBitsFlag;    // Settings.BitFlags = (byte)(SystemState.BitFlags & -16 | (BlackoutLedCheckbox.Checked ? 2 : 0) | (AutoFanControlCheckbox.Checked ? 4 : 0) | (AutoSynchronizeCheckbox.Checked ? 8 : 0));
+    byte           nAirTempOffset;   // (value -128)/10.0
+    byte           nTubeTempOffset;  // (value -128)/10.0
+    byte           nMirorTempOffset; // (value -128)/10.0
+    byte           nDeltaT;
+    byte           nStillTime;
+    std::string                 sVersion;
+    word           nBackstep;
+    word           nBacklash;
+    word           nImmpp;
+    double         dMillimetersPerStep;
+    int            nMaxPos;
+    int            nPreset0;
+    int            nPreset1;
+    int            nPreset2;
+    int            nPreset3;
+    float          fAirTemp;
+    float          fTubeTemp;
+    float          fMirorTemp;
+    int            nBacklashSteps;
+} CCA_Settings;
+
+typedef struct cca_adv_settings {
+    word           nMaxPps;
+    word           nMinPps;
+    byte           nGetbackRate;
+    byte           nBatteryMaxRate;
+    word           nPowerTimer;
+    word           nFanTimer;
+    word           nOriginOffset;
+    bool           bSetFanOn;
+    bool           bRestorePosition;
+    int            nSavedPosistion;
+    byte           nTorqueIndex;
+
 } CCA_Adv_Settings;
+
 
 class CCCAController
 {
@@ -186,6 +235,7 @@ protected:
 
     void            put32(byte *buffer, int position, int value);
     void            put16(byte *buffer, int position, int value);
+    void            copyCurrentSettingsToWriteSettings();
 
     hid_device      *m_DevHandle;
     bool            m_bDebugLog;
@@ -200,13 +250,13 @@ protected:
     
     // the read thread keep updating these
     // Takahashi focuser data for 0x3C from device
-    CCA_Settings        m_CCA_Settings;
+    CCA_Settings_Atom   m_CCA_Settings;
 
     // Takahashi focuser data for 0x11 from device
-    CCA_Adv_Settings    m_CCA_Adv_Settings;
+    CCA_Adv_Settings_Atom    m_CCA_Adv_Settings;
 
-    // we need these to update the device as the above ones get refreshe constantly by the read thread
-    // these get updated from the settings fialog and writen to the device using sendSettings() and sendSettings2()
+    // we need these to update the device as the above ones get refreshed constantly by the read thread
+    // these get updated from the settings dialog and writen to the device using sendSettings() and sendSettings2()
     // Takahashi focuser data for 0x3C to device
     CCA_Settings        m_W_CCA_Settings;
 
@@ -216,6 +266,8 @@ protected:
     CStopWatch      m_cmdTimer;
     CStopWatch      m_gotoTimer;
     CStopWatch      m_reconnectPositionTimer;
+    bool            m_bFanOn;
+    bool            m_bAutoFan;
     // threads
     bool                m_ThreadsAreRunning;
     std::promise<void> *m_exitSignal;

@@ -35,6 +35,7 @@ fi
 cp "./focuserlist CCA.txt" "$TheSkyX_Path/Resources/Common/Miscellaneous Files/"
 cp "./CCA.ui" "$TheSkyX_Path/Resources/Common/$PLUGINS_DIR/FocuserPlugIns/"
 cp "./libCCA.so" "$TheSkyX_Path/Resources/Common/$PLUGINS_DIR/FocuserPlugIns/"
+sudo cp ./99-takahashi.rules /etc/udev/rules.d
 
 app_owner=`/usr/bin/stat -c "%u" "$TheSkyX_Path" | xargs id -n -u`
 if [ ! -z "$app_owner" ]; then
@@ -43,3 +44,5 @@ if [ ! -z "$app_owner" ]; then
 	chown $app_owner "$TheSkyX_Path/Resources/Common/$PLUGINS_DIR/FocuserPlugIns/libCCA.so"
 fi
 chmod  755 "$TheSkyX_Path/Resources/Common/$PLUGINS_DIR/FocuserPlugIns/libCCA.so"
+sudo udevadm control --reload
+sudo udevadm trigger

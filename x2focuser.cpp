@@ -29,6 +29,7 @@ X2Focuser::X2Focuser(const char* pszDisplayName,
         bTmp1 = m_pIniUtil->readInt(PARENT_KEY, AUTOFAN_STATE, 0) == 0? false : true;
         bTmp2 = m_pIniUtil->readInt(PARENT_KEY, FAN_STATE, 0) == 0? false : true;
         m_CCAController.setTemperatureSource(m_pIniUtil->readInt(PARENT_KEY, TEMP_SOURCE, AIR));
+
         if(bTmp1) {
             m_CCAController.setAutoFan(true);
         }
@@ -89,7 +90,11 @@ int	X2Focuser::queryAbstraction(const char* pszName, void** ppVal)
 #pragma mark - DriverInfoInterface
 void X2Focuser::driverInfoDetailedInfo(BasicStringInterface& str) const
 {
-        str = "Takahashi Active Focuser Focuser X2 plugin by Rodolphe Pineau";
+#ifdef PLUGIN_DEBUG
+    str = "Takahashi Active Focuser Focuser X2 plugin by Rodolphe Pineau [DEBUG]";
+#else
+    str = "Takahashi Active Focuser Focuser X2 plugin by Rodolphe Pineau";
+#endif
 }
 
 double X2Focuser::driverInfoVersion(void) const							
@@ -298,19 +303,25 @@ void X2Focuser::uiEvent(X2GUIExchangeInterface* uiex, const char* pszEvent)
 
     
     if (!strcmp(pszEvent, "on_radioButton_clicked")) {
+#ifdef PLUGIN_DEBUG
         m_CCAController.log("on_radioButton_clicked, Fan On, Auto Fan Off");
+#endif
         m_CCAController.setAutoFan(false,true);
         m_CCAController.setFanOn(true);
     }
     else if (!strcmp(pszEvent, "on_radioButton_2_clicked")) {
+#ifdef PLUGIN_DEBUG
         m_CCAController.log("on_radioButton_2_clicked, Fan Off, Auto Fan Off");
+#endif
         m_CCAController.setAutoFan(false,true);
         m_CCAController.setFanOn(false);
     }
     else if (!strcmp(pszEvent, "on_radioButton_3_clicked")) {
+#ifdef PLUGIN_DEBUG
         m_CCAController.log("on_radioButton_3_clicked, Fan Off, Auto Fan On");
+#endif
         m_CCAController.setAutoFan(true,true);
-        m_CCAController.setFanOn(false);
+        //m_CCAController.setFanOn(false);
     }
 
 }
